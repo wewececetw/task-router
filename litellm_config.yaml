@@ -1,0 +1,20 @@
+model_list:
+  # Cloud: Claude for complex tasks
+  - model_name: "claude-sonnet"
+    litellm_params:
+      model: "claude-sonnet-4-20250514"
+    model_info:
+      id: "claude-cloud"
+
+  # Local: oMLX Qwen for simple tasks
+  - model_name: "local-qwen"
+    litellm_params:
+      model: "openai/Qwen3.5-9B-MLX-4bit"
+      api_base: "http://127.0.0.1:9000/v1"
+      api_key: "gYmwat-noxhyr-3zavti"
+    model_info:
+      id: "omlx-local"
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false
