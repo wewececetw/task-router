@@ -11,7 +11,7 @@ model_list:
     litellm_params:
       model: "openai/Qwen3.5-9B-MLX-4bit"
       api_base: "http://127.0.0.1:9000/v1"
-      api_key: "gYmwat-noxhyr-3zavti"
+      api_key: "${OMLX_API_KEY}"
     model_info:
       id: "omlx-local"
 
