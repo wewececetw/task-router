@@ -1,10 +1,10 @@
 """
 oMLX MCP Server — 讓 Claude Code/Desktop 把簡單任務丟給本地模型
 
-Tools:
-  - local_llm: 送 prompt 給本地模型
-  - local_llm_batch: 批量送多個 prompt
-  - local_llm_status: 檢查伺服器狀態
+Features:
+  - Auto-compact: 內容快超過 context window 時自動壓縮再送
+  - Connection pool: 持久化 HTTP 連線
+  - Fallback hint: 太大的任務回報讓 Claude 自己處理
 
 安裝（Claude Code 全域）:
   claude mcp add omlx-local -s user \
@@ -27,10 +27,15 @@ OMLX_BASE = os.environ.get("OMLX_BASE_URL", "http://127.0.0.1:9000/v1")
 OMLX_KEY = os.environ.get("OMLX_API_KEY", "")
 OMLX_MODEL = os.environ.get("OMLX_MODEL", "Qwen3.5-9B-MLX-4bit")
 
+# Context window config (tokens)
+CONTEXT_WINDOW = int(os.environ.get("OMLX_CONTEXT_WINDOW", "32768"))
+COMPACT_THRESHOLD = 0.70  # 70% 時觸發 compact
+REJECT_THRESHOLD = 0.90   # 90% 直接拒絕
+
 mcp = FastMCP("oMLX Local LLM")
 
 # ---------------------------------------------------------------------------
-# Persistent HTTP client — reuse connection pool across calls
+# Persistent HTTP client
 # ---------------------------------------------------------------------------
 
 _headers = {"Content-Type": "application/json"}
@@ -43,6 +48,76 @@ _client = httpx.AsyncClient(
     timeout=120.0,
     limits=httpx.Limits(max_connections=4, max_keepalive_connections=2),
 )
+
+
+# ---------------------------------------------------------------------------
+# Token estimation & auto-compact
+# ---------------------------------------------------------------------------
+
+def _estimate_tokens(text: str) -> int:
+    """粗估 token 數：中文 ~1.5 char/token，英文 ~4 char/token，取混合平均。"""
+    cn_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
+    other_chars = len(text) - cn_chars
+    return int(cn_chars / 1.5 + other_chars / 4)
+
+
+async def _compact(text: str, target_tokens: int) -> str:
+    """用本地模型壓縮內容到目標 token 數。"""
+    ratio = target_tokens / max(_estimate_tokens(text), 1)
+    target_chars = int(len(text) * ratio)
+
+    resp = await _client.post(
+        "/chat/completions",
+        json={
+            "model": OMLX_MODEL,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "你是一個文件壓縮器。保留所有技術細節、API 名稱、檔案路徑、資料結構。刪除冗餘描述和重複內容。輸出必須是結構化的重點摘要。",
+                },
+                {
+                    "role": "user",
+                    "content": f"將以下內容壓縮到約 {target_chars} 字以內，保留所有關鍵技術資訊：\n\n{text}",
+                },
+            ],
+            "max_tokens": target_tokens,
+            "temperature": 0.3,
+        },
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    return data["choices"][0]["message"]["content"]
+
+
+async def _prepare_prompt(prompt: str, system: str, max_tokens: int) -> tuple[str, str, str]:
+    """檢查 token 用量，必要時自動 compact。回傳 (prompt, system, status_note)。"""
+    total_input = _estimate_tokens(prompt) + _estimate_tokens(system)
+    total_needed = total_input + max_tokens  # input + output 預留
+    limit = CONTEXT_WINDOW
+
+    # 安全範圍內
+    if total_needed < limit * COMPACT_THRESHOLD:
+        return prompt, system, ""
+
+    # 太大，直接拒絕
+    if total_needed > limit * REJECT_THRESHOLD:
+        return prompt, system, (
+            f"⚠️ INPUT TOO LARGE: ~{total_input} tokens input + {max_tokens} output "
+            f"= ~{total_needed} tokens, exceeds {int(limit * REJECT_THRESHOLD)} limit. "
+            f"建議由 Claude 直接處理此任務。"
+        )
+
+    # 需要 compact
+    target = int(limit * 0.5) - max_tokens  # compact 到 50% window，留空間給 output
+    if target < 500:
+        return prompt, system, "⚠️ 壓縮後空間不足，建議由 Claude 直接處理。"
+
+    compacted = await _compact(prompt, target)
+    note = (
+        f"🗜️ Auto-compacted: {total_input} → ~{_estimate_tokens(compacted)} tokens "
+        f"({total_input - _estimate_tokens(compacted)} tokens saved)"
+    )
+    return compacted, system, note
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +154,13 @@ async def local_llm(
         max_tokens: 最大回覆 token 數
         temperature: 溫度參數
     """
+    # Auto-compact check
+    prompt, system, note = await _prepare_prompt(prompt, system, max_tokens)
+
+    # If rejected (too large), return the warning
+    if note and note.startswith("⚠️"):
+        return note
+
     messages = []
     if system:
         messages.append({"role": "system", "content": system})
@@ -98,7 +180,8 @@ async def local_llm(
 
     content = data["choices"][0]["message"]["content"]
     model = data.get("model", OMLX_MODEL)
-    return f"[oMLX | {model}]\n\n{content}"
+    prefix = f"🗜️ {note}\n\n" if note else ""
+    return f"{prefix}[oMLX | {model}]\n\n{content}"
 
 
 @mcp.tool()
@@ -130,7 +213,13 @@ async def local_llm_status() -> str:
         data = resp.json()
 
         models = [m["id"] for m in data.get("data", [])]
-        return f"oMLX 運作中 ✅\n伺服器: {OMLX_BASE}\n可用模型: {', '.join(models)}"
+        return (
+            f"oMLX 運作中 ✅\n"
+            f"伺服器: {OMLX_BASE}\n"
+            f"可用模型: {', '.join(models)}\n"
+            f"Context window: {CONTEXT_WINDOW} tokens\n"
+            f"Auto-compact: {int(COMPACT_THRESHOLD*100)}% | Reject: {int(REJECT_THRESHOLD*100)}%"
+        )
     except Exception as e:
         return f"oMLX 無法連線 ❌\n伺服器: {OMLX_BASE}\n錯誤: {e}"
 
