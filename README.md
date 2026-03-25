@@ -109,6 +109,16 @@ cp .claude/commands/*.md ~/.claude/commands/
 /speckit-implement-simple  # 用本地模型寫簡單程式碼
 ```
 
+## 內建保護機制
+
+| 機制 | 說明 |
+|------|------|
+| Auto-compact | 輸入超過 70% context window 時自動壓縮再送 |
+| Chunked map-reduce | 超過 90% 時自動分段處理再合併 |
+| Fallback | 真的太大就回報，Claude 自己接手 |
+| Thinking 過濾 | 自動關閉 Qwen3.5 思考模式 + 過濾 `<think>` 標籤 |
+| macOS 通知 | 任務完成/失敗時彈系統通知，不用盯著等 |
+
 ## 可用的 MCP Tools
 
 | Tool | 說明 |
