@@ -17,6 +17,7 @@ Features:
 from __future__ import annotations
 
 import os
+import re
 import httpx
 from mcp.server.fastmcp import FastMCP
 
@@ -67,6 +68,11 @@ def _estimate_tokens(text: str) -> int:
 # Raw LLM call (no protection, internal use)
 # ---------------------------------------------------------------------------
 
+def _strip_thinking(text: str) -> str:
+    """移除 <think>...</think> 思考過程。"""
+    return re.sub(r"<think>[\s\S]*?</think>\s*", "", text).strip()
+
+
 async def _raw_call(messages: list[dict], max_tokens: int, temperature: float = 0.7) -> str:
     """直接呼叫本地模型，不做任何 token 檢查。"""
     resp = await _client.post(
@@ -76,11 +82,13 @@ async def _raw_call(messages: list[dict], max_tokens: int, temperature: float = 
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
+            "chat_template_kwargs": {"enable_thinking": False},
         },
     )
     resp.raise_for_status()
     data = resp.json()
-    return data["choices"][0]["message"]["content"]
+    content = data["choices"][0]["message"]["content"]
+    return _strip_thinking(content)
 
 
 # ---------------------------------------------------------------------------
