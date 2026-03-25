@@ -50,7 +50,7 @@ Claude Code（Pro/Max 會員）
 ### 2. Clone 並安裝
 
 ```bash
-git clone https://github.com/your-username/task-router.git
+git clone https://github.com/wewececetw/task-router.git
 cd task-router
 uv sync
 ```
@@ -64,14 +64,38 @@ claude mcp add omlx-local -s user \
   -- uv run --directory $(pwd) python mcp_omlx.py
 ```
 
-### 4. 安裝全域 commands
+### 4. 設定 Claude Desktop App（可選）
+
+在 `~/Library/Application Support/Claude/claude_desktop_config.json` 加入：
+
+```json
+{
+  "mcpServers": {
+    "omlx-local": {
+      "command": "/path/to/uv",
+      "args": ["run", "--directory", "/path/to/task-router", "python", "mcp_omlx.py"],
+      "env": {
+        "OMLX_API_KEY": "你的-omlx-key",
+        "OMLX_BASE_URL": "http://127.0.0.1:9000/v1",
+        "OMLX_MODEL": "Qwen3.5-9B-MLX-4bit"
+      }
+    }
+  }
+}
+```
+
+> **注意：** `command` 必須用 `uv` 的完整路徑（用 `which uv` 查詢），Claude Desktop 的 PATH 很有限。
+
+重啟 Claude Desktop App 即可使用。
+
+### 5. 安裝全域 commands
 
 ```bash
 mkdir -p ~/.claude/commands
 cp .claude/commands/*.md ~/.claude/commands/
 ```
 
-### 5. 開始使用
+### 6. 開始使用
 
 在任何專案裡開 Claude Code：
 
