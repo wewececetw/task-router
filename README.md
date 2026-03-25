@@ -124,7 +124,13 @@ cp .claude/commands/*.md ~/.claude/commands/
 | `/local <任務>` | 手動丟給本地模型 | 🖥️ oMLX |
 | `/speckit-tasks` | 從 plan.md 生成任務列表 | 🖥️ oMLX |
 | `/speckit-checklist` | 生成品質檢查清單 | 🖥️ oMLX |
-| `/speckit-implement-simple` | 實作簡單任務 | 🖥️ oMLX |
+| `/speckit-implement-simple` | 實作簡單任務（boilerplate, CRUD, config） | 🖥️ oMLX |
+| `/speckit-analyze` | 檢查 spec/plan/tasks 一致性 | 🖥️ oMLX |
+| `/speckit-docstring` | 為程式碼加 docstring/JSDoc | 🖥️ oMLX |
+| `/speckit-test-stub` | 生成測試骨架 | 🖥️ oMLX |
+| `/speckit-migration` | 生成 DB migration | 🖥️ oMLX |
+| `/speckit-i18n` | 翻譯 i18n 字串檔 | 🖥️ oMLX |
+| `/speckit-changelog` | 從 git diff 生成 changelog | 🖥️ oMLX |
 
 ## CLI 工具（額外功能）
 

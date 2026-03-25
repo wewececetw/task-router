@@ -1,14 +1,16 @@
 """
-oMLX MCP Server — 讓 Claude Code 把簡單任務丟給本地模型
+oMLX MCP Server — 讓 Claude Code/Desktop 把簡單任務丟給本地模型
 
-在 Claude Code 裡註冊這個 MCP server 後，Claude 就多了一個 tool：
-  - local_llm: 把 prompt 送到 oMLX 本地模型處理
+Tools:
+  - local_llm: 送 prompt 給本地模型
+  - local_llm_batch: 批量送多個 prompt
+  - local_llm_status: 檢查伺服器狀態
 
-搭配 Spec Kit 使用時，在 command prompt 裡指示 Claude：
-  「這個任務請用 local_llm tool 完成」
-
-安裝：
-  claude mcp add omlx-local -- uv run --directory /Users/barronwang/C/task-router python mcp_omlx.py
+安裝（Claude Code 全域）:
+  claude mcp add omlx-local -s user \
+    -e OMLX_API_KEY="your-key" \
+    -e OMLX_BASE_URL="http://127.0.0.1:9000/v1" \
+    -- uv run --directory /path/to/task-router python mcp_omlx.py
 """
 
 from __future__ import annotations
@@ -27,6 +29,21 @@ OMLX_MODEL = os.environ.get("OMLX_MODEL", "Qwen3.5-9B-MLX-4bit")
 
 mcp = FastMCP("oMLX Local LLM")
 
+# ---------------------------------------------------------------------------
+# Persistent HTTP client — reuse connection pool across calls
+# ---------------------------------------------------------------------------
+
+_headers = {"Content-Type": "application/json"}
+if OMLX_KEY:
+    _headers["Authorization"] = f"Bearer {OMLX_KEY}"
+
+_client = httpx.AsyncClient(
+    base_url=OMLX_BASE,
+    headers=_headers,
+    timeout=120.0,
+    limits=httpx.Limits(max_connections=4, max_keepalive_connections=2),
+)
+
 
 # ---------------------------------------------------------------------------
 # Tools
@@ -41,16 +58,16 @@ async def local_llm(
 ) -> str:
     """用本地 oMLX 模型回答問題或執行任務。
 
-    適合的任務：
+    適合的任務:
     - 翻譯短文
     - 生成 boilerplate 程式碼
     - 建立簡單的 model/schema
     - 拆解任務列表
-    - 格式轉換（JSON ↔ YAML）
+    - 格式轉換(JSON ↔ YAML)
     - 寫文件、註解
     - 簡單問答
 
-    不適合的任務（請 Claude 自己處理）：
+    不適合的任務（請 Claude 自己處理）:
     - 架構設計
     - 安全相關程式碼
     - 複雜除錯
@@ -67,23 +84,17 @@ async def local_llm(
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
-    headers = {"Content-Type": "application/json"}
-    if OMLX_KEY:
-        headers["Authorization"] = f"Bearer {OMLX_KEY}"
-
-    async with httpx.AsyncClient(timeout=120.0) as client:
-        resp = await client.post(
-            f"{OMLX_BASE}/chat/completions",
-            headers=headers,
-            json={
-                "model": OMLX_MODEL,
-                "messages": messages,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-            },
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    resp = await _client.post(
+        "/chat/completions",
+        json={
+            "model": OMLX_MODEL,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        },
+    )
+    resp.raise_for_status()
+    data = resp.json()
 
     content = data["choices"][0]["message"]["content"]
     model = data.get("model", OMLX_MODEL)
@@ -96,7 +107,7 @@ async def local_llm_batch(
     system: str = "",
     max_tokens: int = 2048,
 ) -> str:
-    """批量送多個 prompt 給本地模型，適合 Spec Kit tasks 階段一次處理多個小任務。
+    """批量送多個 prompt 給本地模型,適合 Spec Kit tasks 階段一次處理多個小任務。
 
     Args:
         prompts: 多個 prompt 的列表
@@ -113,15 +124,10 @@ async def local_llm_batch(
 @mcp.tool()
 async def local_llm_status() -> str:
     """檢查 oMLX 本地模型伺服器狀態。"""
-    headers = {}
-    if OMLX_KEY:
-        headers["Authorization"] = f"Bearer {OMLX_KEY}"
-
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{OMLX_BASE}/models", headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+        resp = await _client.get("/models")
+        resp.raise_for_status()
+        data = resp.json()
 
         models = [m["id"] for m in data.get("data", [])]
         return f"oMLX 運作中 ✅\n伺服器: {OMLX_BASE}\n可用模型: {', '.join(models)}"
