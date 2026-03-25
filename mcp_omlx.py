@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 import httpx
 from mcp.server.fastmcp import FastMCP
 
@@ -67,6 +68,17 @@ def _estimate_tokens(text: str) -> int:
 # ---------------------------------------------------------------------------
 # Raw LLM call (no protection, internal use)
 # ---------------------------------------------------------------------------
+
+def _notify(title: str, message: str):
+    """macOS 系統通知（非阻塞）。"""
+    try:
+        subprocess.Popen([
+            "osascript", "-e",
+            f'display notification "{message}" with title "{title}" sound name "Glass"'
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass  # 通知失敗不影響主流程
+
 
 def _strip_thinking(text: str) -> str:
     """移除 <think>...</think> 思考過程。"""
@@ -307,6 +319,7 @@ async def local_llm(
 
     # Fallback: 回傳警告讓 Claude 接手
     if note and note.startswith("⚠️"):
+        _notify("oMLX ⚠️", "內容太大，交給 Claude")
         return note
 
     # Chunked result: 已經處理完了，直接回傳
@@ -322,6 +335,8 @@ async def local_llm(
     content = await _raw_call(messages, max_tokens=max_tokens, temperature=temperature)
     model_name = OMLX_MODEL
     prefix = f"{note}\n\n" if note else ""
+    short = prompt[:40].replace('"', "'") + "..." if len(prompt) > 40 else prompt.replace('"', "'")
+    _notify("oMLX ✅", f"{short}")
     return f"{prefix}[oMLX | {model_name}]\n\n{content}"
 
 
@@ -340,8 +355,10 @@ async def local_llm_batch(
     """
     results = []
     for i, prompt in enumerate(prompts):
+        _notify("oMLX 🔄", f"Batch {i+1}/{len(prompts)}")
         result = await local_llm(prompt, system=system, max_tokens=max_tokens)
         results.append(f"### Task {i + 1}\n{result}")
+    _notify("oMLX ✅", f"Batch 完成: {len(prompts)} 個任務")
     return "\n\n---\n\n".join(results)
 
 
