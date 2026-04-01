@@ -1,27 +1,28 @@
 ---
-description: "用本地模型把 plan 拆解成任務列表"
+description: "用 vibe-lens 拆解任務，再用本地模型加工"
 ---
 
 你現在執行 **tasks 階段**。
 
-這是一個結構化轉換任務，**請使用 local_llm MCP tool** 來完成，節省 Claude API 額度。
-
 步驟：
-1. 讀取 `specs/` 目錄下的 `plan.md`（和 `spec.md` 如果有的話）
-2. 用 `local_llm` tool 把 plan 拆解成任務列表，prompt 範例：
+1. 先呼叫 vibe-lens MCP tool `sdd_tasks`，傳入 feature_name（從 $ARGUMENTS 取得）
+2. 取得 `sdd_tasks` 的結果後，用 `local_llm` MCP tool 做後處理，prompt：
 
 ```
-根據以下 implementation plan，生成結構化的 tasks.md 任務列表。
-格式要求：
-- 按 Phase 分組（Setup → Foundational → User Stories → Polish）
-- 每個任務格式：- [ ] T001 [P] [US1] 描述 in 檔案路徑
-- [P] 表示可平行執行
-- [US1] 表示所屬 user story
+你是任務拆解助手。以下是 vibe-lens 產出的任務列表。
+請做以下加工：
+- 確保每個任務格式一致：- [ ] [T###] [P?] [US#?] 描述
+- 加上預估時間（分鐘）
+- 如果有中文，加上英文摘要
+- 標記可平行執行的任務
+- 檢查是否有遺漏
 
-Plan 內容：
-{plan.md 的內容}
+任務列表：
+{sdd_tasks 的輸出}
 ```
 
-3. 將結果寫入 `specs/{feature}/tasks.md`
+3. 將 `local_llm` 加工後的結果呈現給使用者
+4. 如果 `local_llm` 回傳 FALLBACK 警告，直接呈現 vibe-lens 原始結果
+5. 如果品質不夠好，你自己修正
 
 $ARGUMENTS
