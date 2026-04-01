@@ -327,6 +327,19 @@ async def local_llm(
     - 複雜除錯
     - 程式碼審查
 
+    vibe-lens 整合規則:
+    當使用者呼叫 vibe-lens (sdd_*) 的 local 階段時，必須用此 tool 做後處理：
+    - sdd_tasks 產出後 → 用 local_llm 加時間估算、格式化、標記可平行任務
+    - sdd_analyze 產出後 → 用 local_llm 加嚴重度 (P0/P1/P2)、翻譯成雙語
+    - sdd_checklist 產出後 → 用 local_llm 擴展成可執行的測試場景
+    - sdd_digest 產出後 → 用 local_llm 翻譯成雙語對照
+    - sdd_export 產出後 → 用 local_llm 調整為 stakeholder 友好格式
+    - sdd_review_artifact 產出後 → 用 local_llm 展開建議成具體改善步驟
+    不需要後處理的 vibe-lens 階段（Cloud，由 Claude 直接處理）:
+    - sdd_constitution, sdd_specify, sdd_clarify, sdd_plan, sdd_gate
+    不需要後處理的工具類:
+    - sdd_status, sdd_guide, sdd_task_next, sdd_task_done, sdd_learn, sdd_explain
+
     Args:
         prompt: 要送給本地模型的提示詞
         system: 系統提示詞（可選）
