@@ -46,26 +46,23 @@ Claude Code（Pro/Max 會員）
 
 從 [omlx.ai](https://omlx.ai/) 下載安裝，在 menu bar 啟動，載入一個模型（例如 Qwen3.5-9B-MLX-4bit）。
 
-記下你的 oMLX port 和 API key（在 oMLX 設定裡可以找到）。
+記下你的 oMLX API key（在 oMLX 設定裡可以找到）。
 
-### 2. Clone 並安裝
+### 2. Clone 並一鍵安裝
 
 ```bash
 git clone https://github.com/wewececetw/task-router.git
 cd task-router
-uv sync
+./install.sh
 ```
 
-### 3. 註冊 MCP server（全域）
+安裝腳本會自動完成：
+- 安裝 Python 依賴（`uv sync`）
+- 註冊 omlx-local MCP server（全域）
+- 複製 slash commands 到 `~/.claude/commands/`
+- 寫入全域 `~/.claude/CLAUDE.md`（vibe-lens + local_llm 路由規則）
 
-```bash
-claude mcp add omlx-local -s user \
-  -e OMLX_API_KEY="你的-omlx-key" \
-  -e OMLX_BASE_URL="http://127.0.0.1:9000/v1" \
-  -- uv run --directory $(pwd) python mcp_omlx.py
-```
-
-### 4. 設定 Claude Desktop App（可選）
+### 3. 設定 Claude Desktop App（可選）
 
 在 `~/Library/Application Support/Claude/claude_desktop_config.json` 加入：
 
@@ -89,14 +86,7 @@ claude mcp add omlx-local -s user \
 
 重啟 Claude Desktop App 即可使用。
 
-### 5. 安裝全域 commands
-
-```bash
-mkdir -p ~/.claude/commands
-cp .claude/commands/*.md ~/.claude/commands/
-```
-
-### 6. 開始使用
+### 4. 開始使用
 
 在任何專案裡開 Claude Code：
 
