@@ -25,6 +25,8 @@ description: "SDD 統一入口 — 自動偵測意圖，調用 vibe-lens + local
 | guide, 下一步 | `sdd_guide` | ❌ 直接回覆 |
 | next, 下個任務 | `sdd_task_next` | ❌ 直接回覆 |
 | done, 完成 | `sdd_task_done` | ❌ 直接回覆 |
+| learn, 學習, 教學 | `sdd_learn` | ❌ 直接回覆 |
+| explain, 說明, 解釋 | `sdd_explain` | ❌ 直接回覆 |
 
 ## 執行流程
 
@@ -71,5 +73,7 @@ description: "SDD 統一入口 — 自動偵測意圖，調用 vibe-lens + local
 - `/sdd analyze user-auth` → `sdd_analyze(feature_name="user-auth")` → `local_llm` 加嚴重度
 - `/sdd next user-auth` → `sdd_task_next(feature_name="user-auth")` → 直接回覆
 - `/sdd done user-auth T001` → `sdd_task_done(feature_name="user-auth", task_id="T001")` → 直接回覆
+- `/sdd learn` → `sdd_learn()` → 直接回覆
+- `/sdd explain workflow` → `sdd_explain(topic="workflow")` → 直接回覆
 
 $ARGUMENTS
