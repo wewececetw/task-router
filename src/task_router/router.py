@@ -12,7 +12,7 @@ from rich.table import Table
 from . import claude_client, local_client
 from .classifier import Classification, TaskComplexity, classify
 from .config import RouterConfig
-from .speckit import SpecPhase, detect_phase, route_phase
+from .workflow import get_workflow, detect_phase, route_phase, WorkflowConfig
 
 console = Console()
 
@@ -33,6 +33,7 @@ class TaskRouter:
 
     def __init__(self, config: RouterConfig | None = None):
         self.config = config or RouterConfig()
+        self.workflow = get_workflow(self.config.workflow)
         self._local_client = None
         self._claude_client = None
 
@@ -53,7 +54,7 @@ class TaskRouter:
         task: str,
         system: str | None = None,
         messages: list[dict] | None = None,
-        phase: SpecPhase | str | None = None,
+        phase: str | None = None,
     ) -> RouterResult:
         """Classify and route a task to the appropriate backend.
 
@@ -61,35 +62,28 @@ class TaskRouter:
             task: The task text
             system: Optional system prompt
             messages: Optional pre-built messages
-            phase: Spec Kit phase override (e.g. "plan", "tasks", "implement").
+            phase: Workflow phase override (e.g. "plan", "tasks", "implement").
                    If provided, uses phase-based routing instead of generic classifier.
         """
         if messages is None:
             messages = [{"role": "user", "content": task}]
 
-        # Convert string phase to enum
-        if isinstance(phase, str):
-            try:
-                phase = SpecPhase(phase)
-            except ValueError:
-                phase = None
-
-        # Classify — use Spec Kit phase routing if phase detected
-        detected_phase = phase or detect_phase(task)
+        # Classify — use workflow phase routing if phase detected
+        detected_phase = phase or detect_phase(task, self.workflow)
         classification = classify(task)
 
         # Determine backend
         if self.config.force_backend:
             backend = self.config.force_backend
-        elif detected_phase != SpecPhase.UNKNOWN:
-            phase_routing = route_phase(task, detected_phase)
+        elif detected_phase != "unknown":
+            phase_routing = route_phase(task, self.workflow, detected_phase)
             backend = phase_routing.backend
             # Override classification reason with phase-aware reason
             classification = Classification(
                 complexity=TaskComplexity.SIMPLE if backend == "local" else TaskComplexity.COMPLEX,
                 confidence=0.85,
-                reason=f"[SpecKit:{detected_phase.value}] {phase_routing.reason}",
-                matched_rules=[f"speckit_phase:{detected_phase.value}"],
+                reason=f"[{self.workflow.name}:{detected_phase}] {phase_routing.reason}",
+                matched_rules=[f"workflow_phase:{detected_phase}"],
             )
         elif classification.complexity == TaskComplexity.SIMPLE:
             backend = "local"

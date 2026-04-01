@@ -1,8 +1,8 @@
 ---
-description: "Spec Kit checklist 階段：用本地模型生成品質檢查清單"
+description: "用本地模型生成品質檢查清單"
 ---
 
-你現在執行 Spec Kit 的 **checklist 階段**。
+你現在執行 **checklist 階段**。
 
 這是結構化輸出任務，**請使用 local_llm MCP tool** 來完成。
 

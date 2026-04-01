@@ -1,8 +1,8 @@
 ---
-description: "Spec Kit analyze 階段：用本地模型檢查 spec 一致性"
+description: "用本地模型檢查 spec 一致性"
 ---
 
-你現在執行 Spec Kit 的 **analyze 階段**。
+你現在執行 **analyze 階段**。
 
 這是模式匹配和比對任務，**請使用 local_llm MCP tool** 來完成。
 

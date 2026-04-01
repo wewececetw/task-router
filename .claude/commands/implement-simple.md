@@ -2,7 +2,7 @@
 description: "用本地模型實作簡單任務（boilerplate, model, config, CRUD）"
 ---
 
-你現在執行 Spec Kit 的 **implement 階段（簡單任務）**。
+你現在執行 **implement 階段（簡單任務）**。
 
 以下類型的任務，**請使用 local_llm MCP tool** 來生成程式碼：
 - 建立 model / schema / entity
