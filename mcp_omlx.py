@@ -375,7 +375,7 @@ async def local_llm_batch(
     max_tokens: int = 2048,
     ctx: Context | None = None,
 ) -> str:
-    """批量送多個 prompt 給本地模型,適合 Spec Kit tasks 階段一次處理多個小任務。
+    """批量送多個 prompt 給本地模型,適合 tasks 階段一次處理多個小任務。
 
     Args:
         prompts: 多個 prompt 的列表

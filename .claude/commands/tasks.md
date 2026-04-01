@@ -1,8 +1,8 @@
 ---
-description: "Spec Kit tasks 階段：用本地模型把 plan 拆解成任務列表"
+description: "用本地模型把 plan 拆解成任務列表"
 ---
 
-你現在執行 Spec Kit 的 **tasks 階段**。
+你現在執行 **tasks 階段**。
 
 這是一個結構化轉換任務，**請使用 local_llm MCP tool** 來完成，節省 Claude API 額度。
 

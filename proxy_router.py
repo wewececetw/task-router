@@ -1,11 +1,12 @@
 """
-Spec Kit Smart Router — LiteLLM-powered proxy
+Task Router Proxy — LiteLLM-powered proxy
 
 A lightweight proxy that sits between Claude Code and your models.
-Routes requests to oMLX (local) or Claude (cloud) based on Spec Kit phases.
+Routes requests to oMLX (local) or Claude (cloud) based on workflow phases.
+Supports vibe-lens, Spec Kit, or any SDD workflow.
 
 Usage:
-  OMLX_API_KEY=xxx python speckit_router.py --port 4000
+  OMLX_API_KEY=xxx python proxy_router.py --port 4000
 
 Claude Code setup:
   ANTHROPIC_BASE_URL=http://127.0.0.1:4000
@@ -27,7 +28,7 @@ import uvicorn
 litellm.set_verbose = False
 os.environ.setdefault("LITELLM_LOG", "ERROR")
 
-app = FastAPI(title="Spec Kit Router")
+app = FastAPI(title="Task Router Proxy")
 
 # ---------------------------------------------------------------------------
 # Config
@@ -41,24 +42,28 @@ CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-20250514")
 # Claude API key picked up from ANTHROPIC_API_KEY env var by litellm
 
 # ---------------------------------------------------------------------------
-# Spec Kit phase detection
+# Workflow phase detection (supports vibe-lens + Spec Kit phases)
 # ---------------------------------------------------------------------------
 
 CLOUD_PHASES = re.compile(
-    r"(?:speckit\.)?(?:constitution|spec(?:ify)?(?:\s|$)|clarify|plan)\b"
+    r"(?:constitution|spec(?:ify)?(?:\s|$)|clarify|plan|gate)\b"
     r"|核心原則|core.?principles"
     r"|需求|requirement|user.?stor"
     r"|釐清|澄清|underspecified"
     r"|架構|architecture.?design"
-    r"|implementation.?plan",
+    r"|implementation.?plan"
+    r"|理解關|comprehension.?check",
     re.I,
 )
 
 LOCAL_PHASES = re.compile(
-    r"(?:speckit\.)?(?:tasks?\b|checklist|analy[zs]e)"
+    r"(?:tasks?\b|checklist|analy[zs]e|digest|export|review.?artifact)"
     r"|task.?list|任務列表|task.?breakdown"
     r"|檢查清單|quality.?check"
-    r"|一致性|consistency.?check",
+    r"|一致性|consistency.?check"
+    r"|商業邏輯|business.?logic.?summary"
+    r"|匯出|stakeholder.?report"
+    r"|審閱產出|artifact.?review",
     re.I,
 )
 
@@ -110,7 +115,7 @@ def decide_backend(text: str) -> str:
         return "cloud"
 
     # Implementation sub-classify
-    if re.search(r"(?:speckit\.)?implement|執行|實作|write.?code|coding", text, re.I):
+    if re.search(r"implement|執行|實作|write.?code|coding", text, re.I):
         if len(COMPLEX_IMPL.findall(text)) > len(SIMPLE_IMPL.findall(text)):
             return "cloud"
         return "local"
@@ -269,7 +274,7 @@ async def list_models():
     return JSONResponse({
         "object": "list",
         "data": [
-            {"id": "speckit-router", "object": "model", "owned_by": "speckit"},
+            {"id": "task-router", "object": "model", "owned_by": "task-router"},
             {"id": CLAUDE_MODEL, "object": "model", "owned_by": "anthropic"},
             {"id": OMLX_MODEL, "object": "model", "owned_by": "omlx-local"},
         ],
@@ -283,7 +288,7 @@ async def health():
     pct_local = (stats["local"] / total * 100) if total > 0 else 0
     return {
         "status": "ok",
-        "router": "speckit",
+        "router": "task-router",
         "stats": {
             **stats,
             "total": total,
@@ -305,16 +310,16 @@ if __name__ == "__main__":
 
     print(f"""
 ╔══════════════════════════════════════════════════╗
-║   Spec Kit Smart Router                          ║
+║   Task Router Proxy                              ║
 ║                                                  ║
 ║   Cloud:  {CLAUDE_MODEL}
 ║   Local:  oMLX Qwen3.5-9B @ :9000
 ║   Proxy:  http://{args.host}:{args.port}
 ║                                                  ║
 ║   Phase Routing:                                 ║
-║     constitution/specify/plan/clarify → Claude   ║
-║     tasks/checklist/analyze           → oMLX     ║
-║     implement                         → auto     ║
+║     constitution/specify/plan/clarify/gate → Claude
+║     tasks/checklist/analyze/digest/export  → oMLX
+║     implement                              → auto
 ╚══════════════════════════════════════════════════╝
 """)
 

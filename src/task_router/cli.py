@@ -13,7 +13,7 @@ from rich.table import Table
 from .classifier import classify, TaskComplexity
 from .config import RouterConfig, ClaudeConfig, OMLXConfig
 from .router import TaskRouter
-from .speckit import SpecPhase, detect_phase, route_phase, PHASE_ROUTING
+from .workflow import get_workflow, detect_phase, route_phase
 
 app = typer.Typer(
     name="task-router",
@@ -30,6 +30,7 @@ def _build_config(
     omlx_key: str | None,
     verbose: bool,
     force: str | None,
+    workflow: str = "vibelens",
 ) -> RouterConfig:
     api_key = claude_key or os.environ.get("ANTHROPIC_API_KEY", "")
     omlx_api_key = omlx_key or os.environ.get("OMLX_API_KEY", "")
@@ -38,6 +39,7 @@ def _build_config(
         omlx=OMLXConfig(base_url=omlx_url, model=omlx_model, api_key=omlx_api_key),
         verbose=verbose,
         force_backend=force,
+        workflow=workflow,
     )
 
 
@@ -51,11 +53,12 @@ def ask(
     omlx_key: str | None = typer.Option(None, "--omlx-key", envvar="OMLX_API_KEY", help="oMLX API key"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show classification details"),
     force: str | None = typer.Option(None, "--force", "-f", help="Force routing to 'local' or 'cloud'"),
-    phase: str | None = typer.Option(None, "--phase", "-p", help="Spec Kit phase: constitution/specify/plan/tasks/implement/analyze/checklist"),
+    phase: str | None = typer.Option(None, "--phase", "-p", help="Workflow phase override (e.g. plan, tasks, implement)"),
+    workflow: str = typer.Option("vibelens", "--workflow", "-w", help="Workflow preset: vibelens, speckit"),
     system: str | None = typer.Option(None, "--system", "-s", help="System prompt"),
 ):
     """Send a task and let the router decide where to run it."""
-    config = _build_config(claude_key, claude_model, omlx_url, omlx_model, omlx_key, verbose, force)
+    config = _build_config(claude_key, claude_model, omlx_url, omlx_model, omlx_key, verbose, force, workflow)
     router = TaskRouter(config)
 
     try:
@@ -92,21 +95,24 @@ def classify_task(
 
 
 @app.command()
-def speckit_route(
+def phases(
     task_file: str | None = typer.Argument(None, help="Path to tasks.md file to analyze"),
+    workflow: str = typer.Option("vibelens", "--workflow", "-w", help="Workflow preset: vibelens, speckit"),
 ):
-    """Show Spec Kit phase routing table, or analyze a tasks.md file."""
+    """Show workflow phase routing table, or analyze a tasks.md file."""
+    wf = get_workflow(workflow)
+
     if task_file is None:
         # Show the routing table
-        table = Table(title="Spec Kit Phase Routing", show_header=True)
+        table = Table(title=f"Phase Routing ({wf.name})", show_header=True)
         table.add_column("Phase", style="bold")
         table.add_column("Backend", style="bold")
         table.add_column("Reason")
 
-        for phase, routing in PHASE_ROUTING.items():
+        for phase_name, routing in wf.phases.items():
             color = "green" if routing.backend == "local" else "blue"
             table.add_row(
-                phase.value,
+                phase_name,
                 f"[{color}]{routing.backend}[/{color}]",
                 routing.reason,
             )
@@ -139,7 +145,7 @@ def speckit_route(
     cloud_count = 0
 
     for task_line in tasks:
-        routing = route_phase(task_line, SpecPhase.IMPLEMENT)
+        routing = route_phase(task_line, wf, "implement")
         color = "green" if routing.backend == "local" else "blue"
         # Extract task ID
         id_match = _re.match(r"(T\d+)", task_line)
