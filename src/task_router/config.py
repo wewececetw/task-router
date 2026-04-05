@@ -30,5 +30,5 @@ class RouterConfig(BaseModel):
     # Force all tasks to a specific backend (bypass classifier)
     force_backend: str | None = None  # "local" or "cloud" or None
     # Workflow toolkit: "vibelens", "speckit", or custom
-    workflow: str = "vibelens"
+    workflow: str = "speckit"
     verbose: bool = False

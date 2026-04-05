@@ -199,7 +199,7 @@ WORKFLOW_PRESETS: dict[str, callable] = {
 }
 
 
-def get_workflow(name: str = "vibelens") -> WorkflowConfig:
+def get_workflow(name: str = "speckit") -> WorkflowConfig:
     """Get a workflow config by name."""
     factory = WORKFLOW_PRESETS.get(name)
     if factory is None:
@@ -214,7 +214,7 @@ def get_workflow(name: str = "vibelens") -> WorkflowConfig:
 def detect_phase(task: str, config: WorkflowConfig | None = None) -> str:
     """Detect which workflow phase a task belongs to."""
     if config is None:
-        config = vibelens_workflow()
+        config = speckit_workflow()
     for phase, pattern in config.detectors:
         if pattern.search(task):
             return phase
@@ -239,14 +239,14 @@ def route_phase(task: str, config: WorkflowConfig | None = None, phase: str | No
 
     Args:
         task: The task description or prompt
-        config: Workflow config to use. Defaults to vibe-lens.
+        config: Workflow config to use. Defaults to Spec Kit.
         phase: Explicit phase override. If None, auto-detect from task text.
 
     Returns:
         PhaseRouting with backend decision
     """
     if config is None:
-        config = vibelens_workflow()
+        config = speckit_workflow()
 
     if phase is None:
         phase = detect_phase(task, config)
