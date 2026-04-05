@@ -1,6 +1,6 @@
 """Workflow-aware phase routing.
 
-Supports pluggable workflow toolkits (vibe-lens, Spec Kit, or custom).
+Supports pluggable workflow toolkits (Spec Kit, or custom).
 Maps workflow phases to routing decisions:
 - Deep reasoning phases → cloud (Claude)
 - Structured output phases → local (oMLX)
@@ -63,80 +63,8 @@ COMPLEX_IMPL_PATTERNS: list[tuple[str, re.Pattern]] = [
 # Workflow presets
 # ---------------------------------------------------------------------------
 
-def vibelens_workflow() -> WorkflowConfig:
-    """Vibe Lens (Spec-Driven Development) workflow preset."""
-    phases = {
-        "constitution": PhaseRouting(
-            phase="constitution", backend="cloud",
-            reason="定義專案原則 — 需要深度推理",
-        ),
-        "specify": PhaseRouting(
-            phase="specify", backend="cloud",
-            reason="需求分析需要理解使用者故事",
-        ),
-        "clarify": PhaseRouting(
-            phase="clarify", backend="cloud",
-            reason="釐清需要理解上下文找出缺口",
-        ),
-        "plan": PhaseRouting(
-            phase="plan", backend="cloud",
-            reason="架構決策需要強推理能力",
-        ),
-        "tasks": PhaseRouting(
-            phase="tasks", backend="local",
-            reason="結構化轉換，從 plan 拆解任務",
-        ),
-        "implement": PhaseRouting(
-            phase="implement", backend="local",
-            reason="依個別任務複雜度決定",
-            allow_override=True,
-        ),
-        "analyze": PhaseRouting(
-            phase="analyze", backend="local",
-            reason="一致性檢查是模式匹配工作",
-        ),
-        "checklist": PhaseRouting(
-            phase="checklist", backend="local",
-            reason="結構化輸出",
-        ),
-        "gate": PhaseRouting(
-            phase="gate", backend="cloud",
-            reason="理解關卡需要推理判斷正確性",
-        ),
-        "digest": PhaseRouting(
-            phase="digest", backend="local",
-            reason="從現有產出物做結構化摘要",
-        ),
-        "export": PhaseRouting(
-            phase="export", backend="local",
-            reason="結構化報告格式轉換",
-        ),
-        "review_artifact": PhaseRouting(
-            phase="review_artifact", backend="local",
-            reason="方法論檢查清單比對",
-        ),
-    }
-
-    detectors = [
-        ("constitution", re.compile(r"constitution|核心原則|core.?principles", re.I)),
-        ("checklist",    re.compile(r"checklist|檢查清單|quality.?check", re.I)),
-        ("tasks",        re.compile(r"tasks?\b|task.?list|任務列表|task.?breakdown", re.I)),
-        ("analyze",      re.compile(r"analy[zs]e|一致性|consistency.?check", re.I)),
-        ("implement",    re.compile(r"implement|執行|實作|write.?code|coding", re.I)),
-        ("clarify",      re.compile(r"clarify|釐清|澄清|underspecified", re.I)),
-        ("specify",      re.compile(r"spec(?:ify)?(?:\s|$)|需求|requirement|user.?stor", re.I)),
-        ("plan",         re.compile(r"plan\b|implementation.?plan|架構|architecture.?design", re.I)),
-        ("gate",         re.compile(r"gate|理解關|comprehension.?check", re.I)),
-        ("digest",       re.compile(r"digest|商業邏輯|business.?logic.?summary", re.I)),
-        ("export",       re.compile(r"export|匯出|stakeholder.?report", re.I)),
-        ("review_artifact", re.compile(r"review.?artifact|審閱產出|artifact.?review", re.I)),
-    ]
-
-    return WorkflowConfig(name="vibe-lens", phases=phases, detectors=detectors)
-
-
 def speckit_workflow() -> WorkflowConfig:
-    """Spec Kit workflow preset (subset of vibe-lens phases)."""
+    """Spec Kit workflow preset."""
     phases = {
         "constitution": PhaseRouting(
             phase="constitution", backend="cloud",
@@ -192,8 +120,6 @@ def speckit_workflow() -> WorkflowConfig:
 # ---------------------------------------------------------------------------
 
 WORKFLOW_PRESETS: dict[str, callable] = {
-    "vibelens": vibelens_workflow,
-    "vibe-lens": vibelens_workflow,
     "speckit": speckit_workflow,
     "spec-kit": speckit_workflow,
 }

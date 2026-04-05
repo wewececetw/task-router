@@ -3,7 +3,7 @@ Task Router Proxy — LiteLLM-powered proxy
 
 A lightweight proxy that sits between Claude Code and your models.
 Routes requests to oMLX (local) or Claude (cloud) based on workflow phases.
-Supports vibe-lens, Spec Kit, or any SDD workflow.
+Supports Spec Kit or any SDD workflow.
 
 Usage:
   OMLX_API_KEY=xxx python proxy_router.py --port 4000
@@ -42,7 +42,7 @@ CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-20250514")
 # Claude API key picked up from ANTHROPIC_API_KEY env var by litellm
 
 # ---------------------------------------------------------------------------
-# Workflow phase detection (supports vibe-lens + Spec Kit phases)
+# Workflow phase detection (Spec Kit phases)
 # ---------------------------------------------------------------------------
 
 CLOUD_PHASES = re.compile(

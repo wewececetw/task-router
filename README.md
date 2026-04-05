@@ -1,7 +1,7 @@
 # Task Router
 
 智慧任務分流系統 — 簡單任務交給本地模型 (oMLX)，複雜任務留給 Claude。
-支援 vibe-lens、Spec Kit、或任何自訂工作流。
+支援 Spec Kit 或任何自訂工作流。
 
 ## 為什麼需要這個？
 
@@ -60,7 +60,7 @@ cd task-router
 - 安裝 Python 依賴（`uv sync`）
 - 註冊 omlx-local MCP server（全域）
 - 複製 slash commands 到 `~/.claude/commands/`
-- 寫入全域 `~/.claude/CLAUDE.md`（vibe-lens + local_llm 路由規則）
+- 複製 `speckit-*` 系列 slash commands 到 `~/.claude/commands/`
 
 ### 3. 設定 Claude Desktop App（可選）
 
@@ -102,21 +102,14 @@ cd task-router
 
 ## 支援的工作流
 
-### vibe-lens（預設）
+### Spec Kit（預設）
 
-[Vibe Lens](https://github.com/anthropics/vibe-lens) 的 Spec-Driven Development 工作流，包含：
-constitution → specify → clarify → plan → tasks → implement → analyze → checklist → gate → digest → export → review_artifact
-
-### Spec Kit
-
-[GitHub Spec Kit](https://github.com/github/spec-kit) 工作流（vibe-lens 的子集）：
+[GitHub Spec Kit](https://github.com/github/spec-kit) 的 Spec-Driven Development 工作流：
 constitution → specify → clarify → plan → tasks → implement → analyze → checklist
 
-### 切換工作流
+### CLI 用法
 
 ```bash
-# CLI
-uv run task-router phases --workflow vibelens
 uv run task-router phases --workflow speckit
 uv run task-router ask "generate task list" --workflow speckit
 ```
