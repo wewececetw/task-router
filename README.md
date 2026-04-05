@@ -23,22 +23,30 @@ Claude Code（Pro/Max 會員）
     │
     ├── 複雜任務 → Claude 自己處理（會員額度）
     │
-    └── /local, /tasks, /checklist ...
+    └── /local, /i18n, /docstring ...
          │
-         └── MCP tool: local_llm
+         └── Bash: ./scripts/call-omlx.sh
               │
-              └── oMLX (本地 Qwen3.5-9B)
+              └── curl → oMLX (本地 Qwen3.5-9B)
 ```
 
+**為什麼用 Bash+curl 而不是 MCP？**
+- Claude Code UI 會顯示 `Bash(./scripts/call-omlx.sh ...)` — 與原生工具（Read/Write/Edit）視覺一致
+- 不會有 MCP tool call 的折疊 JSON 割裂感
+- 使用者全程看得到「在做什麼」
+
 不需要 proxy，不需要額外 API key，不違反 Anthropic 條款。
+
+> **Legacy**: 舊版 MCP server (`mcp_omlx.py`) 保留為 optional，安裝時可選擇是否註冊。
 
 ## 環境需求
 
 - macOS + Apple Silicon（M1 以上）
 - [oMLX](https://omlx.ai/) — 本地 LLM 推理伺服器
 - [Claude Code](https://claude.com/claude-code) — Pro 或 Max 會員
-- Python 3.11+
-- [uv](https://github.com/astral-sh/uv) — Python 套件管理
+- `curl` + `jq` — macOS 內建（`brew install jq` 若沒裝）
+- Python 3.11+（僅 legacy MCP 需要）
+- [uv](https://github.com/astral-sh/uv) — Python 套件管理（僅 legacy MCP 需要）
 
 ## 快速開始
 
@@ -59,7 +67,8 @@ cd task-router
 安裝腳本會自動完成：
 - 安裝 Python 依賴（`uv sync`）
 - 註冊 omlx-local MCP server（全域）
-- 複製 slash commands 到 `~/.claude/commands/`（含 `/local`、`/speckit-*` 系列）
+- 複製 slash commands 到 `~/.claude/commands/`（7 個本地模型工具：`/local`、`/i18n`、`/docstring`、`/migration`、`/test-stub`、`/changelog`、`/implement-simple`）
+- 複製 `scripts/call-omlx.sh` helper 到全域位置
 - 寫入全域 `~/.claude/CLAUDE.md` 自動路由規則（Spec Kit + local_llm）
 
 **自動路由規則是核心：** 寫入後 Claude 在任何專案遇到 `/speckit.tasks`、`/speckit.analyze`、`/speckit.checklist`、翻譯 i18n、產 docstring 等輕量任務時，會自動委派給本地模型 — 不用你手動選。
@@ -104,10 +113,10 @@ cd task-router
 /speckit.checklist # 🖥️ 自動委派給本地模型
 
 # 輕量工具（一律走本地）
-/speckit-docstring /speckit-i18n /speckit-migration /speckit-test-stub ...
+/i18n /docstring /migration /test-stub /changelog /implement-simple
 ```
 
-**怎麼知道有沒有自動路由？** 看 Claude Code 的 tool call 列表 — 出現 `omlx-local: Local llm` 就代表有省到 token。
+**怎麼知道有沒有自動路由？** 看 Claude Code 的 tool call 列表 — 出現 `Bash(./scripts/call-omlx.sh ...)` 就代表有省到 token。
 
 ## 支援的工作流
 

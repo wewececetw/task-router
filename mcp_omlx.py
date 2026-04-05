@@ -1,6 +1,15 @@
 """
 oMLX MCP Server — 讓 Claude Code/Desktop 把簡單任務丟給本地模型
 
+⚠️  LEGACY / OPTIONAL (2026-04-05)
+新架構改用 scripts/call-omlx.sh + Bash+curl，UI 顯示與 Claude Code 原生工具一致。
+此 MCP server 保留作為：
+  - 舊用戶升級的相容層
+  - 需要 auto-compact / chunked map-reduce 處理超大 prompt 的情境
+  - 偏好 MCP 介面的使用者
+
+新用戶建議直接用 `./scripts/call-omlx.sh`，不需註冊此 MCP。
+
 Features:
   - Auto-compact: 內容快超過 context window 時自動壓縮再送
   - Chunked processing: 太大的內容自動分段處理再合併

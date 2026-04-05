@@ -2,14 +2,14 @@
 description: "用本地模型從 git diff 生成 changelog"
 ---
 
-**請使用 local_llm MCP tool** 生成 changelog。
+從 git 歷史生成 changelog。
 
 步驟：
-1. 執行 `git log --oneline -20` 和 `git diff HEAD~5` 取得最近的變更
-2. 用 `local_llm` tool 生成 changelog，prompt：
+1. 用 Bash 取得 git 變更：`git log --oneline -20 && git diff --stat HEAD~5`
+2. 用 Bash 執行 `./scripts/call-omlx.sh` 生成 changelog：
 
-```
-根據以下 git log 和 diff，生成 CHANGELOG 條目。
+```bash
+./scripts/call-omlx.sh "根據以下 git log 和 diff，生成 CHANGELOG 條目。
 格式：Keep a Changelog (https://keepachangelog.com/)
 
 分類：
@@ -21,10 +21,11 @@ description: "用本地模型從 git diff 生成 changelog"
 Git log:
 {git log}
 
-Diff summary:
-{git diff --stat}
+Diff stat:
+{git diff --stat}" --max-tokens 2048 --temperature 0.5
 ```
 
-3. 將結果插入 `CHANGELOG.md` 頂部（或建立新檔）
+3. 將結果用 Write 插入 `CHANGELOG.md` 頂部（或建立新檔）
+4. 如果 FALLBACK，你自己寫 changelog
 
 $ARGUMENTS
