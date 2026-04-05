@@ -96,73 +96,15 @@ done
 echo ""
 
 # ------------------------------------------------------------------
-# 6. 寫入全域 CLAUDE.md（vibe-lens + local_llm 路由規則）
+# 6. 清除舊版 vibe-lens section（如果有）
 # ------------------------------------------------------------------
 
-echo "📄 設定全域 CLAUDE.md..."
-
-# 定義要加入的 section 標記
-MARKER="# === Task Router: vibe-lens + local_llm 路由規則 ==="
-MARKER_END="# === End Task Router ==="
-
-# 如果已經有舊的 section，先移除
-if [ -f "$CLAUDE_MD" ]; then
-    # 用 sed 移除舊的 section
-    if grep -q "$MARKER" "$CLAUDE_MD" 2>/dev/null; then
-        sed -i '' "/$MARKER/,/$MARKER_END/d" "$CLAUDE_MD"
-        echo "   (移除舊的 Task Router section)"
-    fi
+if [ -f "$CLAUDE_MD" ] && grep -q "# === Task Router: vibe-lens" "$CLAUDE_MD" 2>/dev/null; then
+    echo "🧹 偵測到舊版 vibe-lens 區塊，自動清除..."
+    sed -i '' '/# === Task Router: vibe-lens/,/# === End Task Router ===/d' "$CLAUDE_MD"
+    echo "✅ 已清除"
+    echo ""
 fi
-
-# Append 新的 section
-cat >> "$CLAUDE_MD" << 'RULES'
-
-# === Task Router: vibe-lens + local_llm 路由規則 ===
-
-## vibe-lens + local_llm 整合
-
-當使用 vibe-lens (sdd_*) MCP tools 時，必須遵循以下路由規則：
-
-### Local 階段 — 先呼叫 vibe-lens，再用 local_llm 後處理
-
-| vibe-lens tool | local_llm 後處理 |
-|----------------|-----------------|
-| `sdd_tasks` | 加時間估算、格式化、標記可平行任務 |
-| `sdd_analyze` | 加嚴重度 (P0/P1/P2)、翻譯成雙語 |
-| `sdd_checklist` | 擴展成可執行的測試場景 |
-| `sdd_digest` | 翻譯成雙語對照 |
-| `sdd_export` | 調整為 stakeholder 友好格式 |
-| `sdd_review_artifact` | 展開建議成具體改善步驟 |
-
-後處理 prompt 格式：
-```
-你是 SDD 工作流助手。以下是 vibe-lens 的 {階段名} 產出。
-請做以下加工：{對應的後處理內容}
-
-原始產出：
-{vibe-lens 的輸出}
-```
-
-### Cloud 階段 — 只呼叫 vibe-lens，不用 local_llm
-
-`sdd_constitution`, `sdd_specify`, `sdd_clarify`, `sdd_plan`, `sdd_gate`
-這些需要深度推理，由 Claude 直接處理。
-
-### 工具類 — 直接回覆
-
-`sdd_status`, `sdd_guide`, `sdd_task_next`, `sdd_task_done`, `sdd_learn`, `sdd_explain`
-
-### Fallback
-
-- 如果 local_llm 回傳 FALLBACK 警告，直接呈現 vibe-lens 原始結果
-- 簡單實作任務（boilerplate, CRUD, config）用 local_llm
-- 複雜任務（auth, security, 核心邏輯）由 Claude 處理
-
-# === End Task Router ===
-RULES
-
-echo "✅ 全域 CLAUDE.md 已更新"
-echo ""
 
 # ------------------------------------------------------------------
 # 完成
@@ -174,10 +116,10 @@ echo "==============================="
 echo ""
 echo "使用方式："
 echo "  在任何專案開 claude，即可使用："
-echo "  • /sdd tasks user-auth    — vibe-lens 拆任務 + local_llm 加工"
-echo "  • /sdd plan user-auth     — vibe-lens 規劃（Claude 處理）"
-echo "  • /local 翻譯 hello world — 直接丟給本地模型"
-echo "  • /tasks feature-name     — 拆解任務列表"
+echo "  • /local 翻譯 hello world         — 直接丟給本地模型"
+echo "  • /speckit-tasks feature-name     — Spec Kit 拆任務"
+echo "  • /speckit-analyze feature-name   — Spec Kit 一致性檢查"
+echo "  • /speckit-checklist feature-name — Spec Kit 品質清單"
 echo ""
 echo "⚠️  記得先啟動 oMLX app 並載入模型！"
 echo ""
