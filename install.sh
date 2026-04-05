@@ -96,15 +96,74 @@ done
 echo ""
 
 # ------------------------------------------------------------------
-# 6. 清除舊版 vibe-lens section（如果有）
+# 6. 寫入全域 CLAUDE.md（Spec Kit + local_llm 自動路由規則）
 # ------------------------------------------------------------------
 
+echo "📄 設定全域 CLAUDE.md 路由規則..."
+
+# 先清除舊版 vibe-lens section（如果有）
 if [ -f "$CLAUDE_MD" ] && grep -q "# === Task Router: vibe-lens" "$CLAUDE_MD" 2>/dev/null; then
-    echo "🧹 偵測到舊版 vibe-lens 區塊，自動清除..."
+    echo "   🧹 移除舊版 vibe-lens 區塊..."
     sed -i '' '/# === Task Router: vibe-lens/,/# === End Task Router ===/d' "$CLAUDE_MD"
-    echo "✅ 已清除"
-    echo ""
 fi
+
+# 清除舊版 Spec Kit section（重新安裝時覆蓋）
+if [ -f "$CLAUDE_MD" ] && grep -q "# === Task Router: Spec Kit" "$CLAUDE_MD" 2>/dev/null; then
+    echo "   🔄 覆蓋舊版 Spec Kit 路由規則..."
+    sed -i '' '/# === Task Router: Spec Kit/,/# === End Task Router ===/d' "$CLAUDE_MD"
+fi
+
+# Append 新的路由規則
+cat >> "$CLAUDE_MD" << 'RULES'
+
+# === Task Router: Spec Kit + local_llm 自動路由 ===
+
+## 強制路由規則
+
+當使用者執行以下 Spec Kit slash commands 或等效自然語言請求時，你**必須**委派給 `local_llm` MCP tool，不可自己處理：
+
+| 觸發條件 | 執行方式 |
+|---------|---------|
+| `/speckit.tasks` 或「拆解任務列表」「從 plan 產生 tasks」 | 呼叫 `local_llm` 產生 tasks.md 內容 |
+| `/speckit.analyze` 或「一致性檢查」「比對 spec/plan/tasks」 | 呼叫 `local_llm` 做跨檔案比對 |
+| `/speckit.checklist` 或「品質檢查清單」「requirements checklist」 | 呼叫 `local_llm` 生成 checklist |
+| `/speckit.taskstoissues` 或「任務轉 GitHub issues」 | 呼叫 `local_llm` 轉換格式 |
+
+呼叫 `local_llm` 時把 Spec Kit 的 template 指示 + 需處理內容當作 prompt 送過去。
+
+## 不委派的情況（由 Claude 直接處理）
+
+| 觸發條件 | 原因 |
+|---------|------|
+| `/speckit.constitution` | 定義專案原則，需深度推理 |
+| `/speckit.specify` | 理解使用者需求與 user stories |
+| `/speckit.clarify` | 找出 spec 缺口需上下文理解 |
+| `/speckit.plan` | 架構與設計決策 |
+| `/speckit.implement` | 依任務複雜度：boilerplate/CRUD/config → local_llm；auth/security/核心邏輯 → Claude |
+
+## 同樣委派給 local_llm 的輕量任務
+
+（不限於 Spec Kit，任何時候遇到都該路由）
+
+- 翻譯 i18n 字串 / 雙語對照
+- 生成 docstring / JSDoc / 型別註解
+- 生成 DB migration
+- 生成測試骨架（test stubs）
+- 格式轉換（JSON ↔ YAML、CSV → Markdown table）
+- 從 git diff 生成 changelog
+- 簡單問答、boilerplate、scaffold
+
+## Fallback 規則
+
+- 若 `local_llm` 回傳以 `⚠️ oMLX FALLBACK` 開頭 → 你接手自己處理
+- 若 `local_llm_status` 顯示 ❌ 無法連線 → 你接手自己處理
+- 若本地模型產出品質明顯不夠（邏輯錯誤、格式破損）→ 你重做
+
+# === End Task Router ===
+RULES
+
+echo "✅ 全域 CLAUDE.md 路由規則已寫入"
+echo ""
 
 # ------------------------------------------------------------------
 # 完成
