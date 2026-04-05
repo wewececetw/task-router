@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import time
 import httpx
 from mcp.server.fastmcp import FastMCP, Context
 
@@ -346,10 +347,17 @@ async def local_llm(
         max_tokens: 最大回覆 token 數
         temperature: 溫度參數
     """
-    if ctx:
-        short_prompt = prompt[:60].replace("\n", " ") + ("..." if len(prompt) > 60 else "")
-        await ctx.info(f"準備 prompt: {short_prompt}")
+    # 記錄原始輸入用於顯示
+    original_prompt = prompt
+    original_tokens = _estimate_tokens(prompt) + _estimate_tokens(system)
+    task_preview = original_prompt[:80].replace("\n", " ")
+    if len(original_prompt) > 80:
+        task_preview += "..."
 
+    if ctx:
+        await ctx.info(f"準備 prompt: {task_preview}")
+
+    t_start = time.perf_counter()
     prompt, system, note = await _prepare_prompt(prompt, system, max_tokens, ctx=ctx)
 
     # Fallback: 回傳警告讓 Claude 接手
@@ -357,13 +365,34 @@ async def local_llm(
         if ctx:
             await ctx.warning("Prompt 太大，fallback 給 Claude")
         _notify("oMLX ⚠️", "內容太大，交給 Claude")
-        return note
+        header = (
+            f"⚠️  oMLX FALLBACK\n"
+            f"├─ 任務: {task_preview}\n"
+            f"├─ 輸入: {original_tokens} tokens\n"
+            f"└─ 原因: 內容太大，建議 Claude 直接處理\n"
+            f"{'─' * 50}\n"
+        )
+        return header + note
 
     # Chunked result: 已經處理完了，直接回傳
     if note and note.startswith("CHUNKED_RESULT:"):
+        elapsed = time.perf_counter() - t_start
+        chunked_note = note.replace("CHUNKED_RESULT:", "", 1).split("\n\n", 1)
+        strategy = chunked_note[0] if chunked_note else ""
+        content = chunked_note[1] if len(chunked_note) > 1 else ""
+        output_tokens = _estimate_tokens(content)
         if ctx:
             await ctx.info("Chunked 處理完成")
-        return note.replace("CHUNKED_RESULT:", "", 1)
+        _notify("oMLX ✅", f"{task_preview[:30]} (chunked)")
+        header = (
+            f"✅ oMLX | {OMLX_MODEL}\n"
+            f"├─ 任務: {task_preview}\n"
+            f"├─ 策略: {strategy}\n"
+            f"├─ 輸入: {original_tokens} tokens → 輸出: {output_tokens} tokens\n"
+            f"└─ 耗時: {elapsed:.1f}s\n"
+            f"{'─' * 50}\n"
+        )
+        return header + content
 
     # 正常送
     messages = []
@@ -372,13 +401,23 @@ async def local_llm(
     messages.append({"role": "user", "content": prompt})
 
     content = await _raw_call(messages, max_tokens=max_tokens, temperature=temperature, ctx=ctx)
-    model_name = OMLX_MODEL
-    prefix = f"{note}\n\n" if note else ""
-    short = prompt[:40].replace('"', "'") + "..." if len(prompt) > 40 else prompt.replace('"', "'")
-    _notify("oMLX ✅", f"{short}")
+    elapsed = time.perf_counter() - t_start
+    output_tokens = _estimate_tokens(content)
+
+    _notify("oMLX ✅", f"{task_preview[:30]}")
     if ctx:
         await ctx.info("完成 ✅")
-    return f"{prefix}[oMLX | {model_name}]\n\n{content}"
+
+    strategy_line = f"├─ 策略: {note}\n" if note else ""
+    header = (
+        f"✅ oMLX | {OMLX_MODEL}\n"
+        f"├─ 任務: {task_preview}\n"
+        f"{strategy_line}"
+        f"├─ 輸入: {original_tokens} tokens → 輸出: {output_tokens} tokens\n"
+        f"└─ 耗時: {elapsed:.1f}s\n"
+        f"{'─' * 50}\n"
+    )
+    return header + content
 
 
 @mcp.tool()
@@ -395,6 +434,7 @@ async def local_llm_batch(
         system: 共用的系統提示詞（可選）
         max_tokens: 每個 prompt 的最大回覆 token 數
     """
+    t_start = time.perf_counter()
     if ctx:
         await ctx.info(f"Batch：處理 {len(prompts)} 個任務...")
     results = []
@@ -404,10 +444,17 @@ async def local_llm_batch(
         _notify("oMLX 🔄", f"Batch {i+1}/{len(prompts)}")
         result = await local_llm(prompt, system=system, max_tokens=max_tokens, ctx=ctx)
         results.append(f"### Task {i + 1}\n{result}")
+    elapsed = time.perf_counter() - t_start
     if ctx:
         await ctx.info(f"Batch 完成：{len(prompts)} 個任務 ✅")
     _notify("oMLX ✅", f"Batch 完成: {len(prompts)} 個任務")
-    return "\n\n---\n\n".join(results)
+    header = (
+        f"✅ oMLX Batch | {OMLX_MODEL}\n"
+        f"├─ 任務數: {len(prompts)}\n"
+        f"└─ 總耗時: {elapsed:.1f}s\n"
+        f"{'═' * 50}\n\n"
+    )
+    return header + "\n\n---\n\n".join(results)
 
 
 @mcp.tool()
@@ -422,15 +469,20 @@ async def local_llm_status(ctx: Context | None = None) -> str:
 
         models = [m["id"] for m in data.get("data", [])]
         return (
-            f"oMLX 運作中 ✅\n"
-            f"伺服器: {OMLX_BASE}\n"
-            f"可用模型: {', '.join(models)}\n"
-            f"Context window: {CONTEXT_WINDOW} tokens\n"
-            f"Auto-compact: >{int(COMPACT_THRESHOLD*100)}% | "
-            f"Chunked: >{int(CHUNK_THRESHOLD*100)}% (max {MAX_CHUNKS} chunks)"
+            f"✅ oMLX 運作中\n"
+            f"├─ 伺服器: {OMLX_BASE}\n"
+            f"├─ 目前模型: {OMLX_MODEL}\n"
+            f"├─ 可用模型: {', '.join(models)}\n"
+            f"├─ Context window: {CONTEXT_WINDOW} tokens\n"
+            f"└─ 保護機制: auto-compact >{int(COMPACT_THRESHOLD*100)}% | "
+            f"chunked >{int(CHUNK_THRESHOLD*100)}% (max {MAX_CHUNKS})"
         )
     except Exception as e:
-        return f"oMLX 無法連線 ❌\n伺服器: {OMLX_BASE}\n錯誤: {e}"
+        return (
+            f"❌ oMLX 無法連線\n"
+            f"├─ 伺服器: {OMLX_BASE}\n"
+            f"└─ 錯誤: {e}"
+        )
 
 
 # ---------------------------------------------------------------------------
