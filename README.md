@@ -59,8 +59,10 @@ cd task-router
 安裝腳本會自動完成：
 - 安裝 Python 依賴（`uv sync`）
 - 註冊 omlx-local MCP server（全域）
-- 複製 slash commands 到 `~/.claude/commands/`
-- 複製 `speckit-*` 系列 slash commands 到 `~/.claude/commands/`
+- 複製 slash commands 到 `~/.claude/commands/`（含 `/local`、`/speckit-*` 系列）
+- 寫入全域 `~/.claude/CLAUDE.md` 自動路由規則（Spec Kit + local_llm）
+
+**自動路由規則是核心：** 寫入後 Claude 在任何專案遇到 `/speckit.tasks`、`/speckit.analyze`、`/speckit.checklist`、翻譯 i18n、產 docstring 等輕量任務時，會自動委派給本地模型 — 不用你手動選。
 
 ### 3. 設定 Claude Desktop App（可選）
 
@@ -88,17 +90,24 @@ cd task-router
 
 ### 4. 開始使用
 
-在任何專案裡開 Claude Code：
+在任何專案裡開 Claude Code，**安裝後所有專案都自動生效**：
 
 ```bash
-# 把任務丟給本地模型
+# 手動指定本地模型
 /local 翻譯這段英文成中文
 
-# 工作流 commands
-/tasks             # 用本地模型拆解任務列表
-/checklist         # 用本地模型生成品質檢查清單
-/implement-simple  # 用本地模型寫簡單程式碼
+# Spec Kit 官方指令 — Claude 會依規則自動路由
+/speckit.specify   # ☁️ Claude 處理（需推理）
+/speckit.plan      # ☁️ Claude 處理（架構決策）
+/speckit.tasks     # 🖥️ 自動委派給本地模型（省 token）
+/speckit.analyze   # 🖥️ 自動委派給本地模型
+/speckit.checklist # 🖥️ 自動委派給本地模型
+
+# 輕量工具（一律走本地）
+/speckit-docstring /speckit-i18n /speckit-migration /speckit-test-stub ...
 ```
+
+**怎麼知道有沒有自動路由？** 看 Claude Code 的 tool call 列表 — 出現 `omlx-local: Local llm` 就代表有省到 token。
 
 ## 支援的工作流
 
