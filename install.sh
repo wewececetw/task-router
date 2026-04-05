@@ -10,6 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CLAUDE_DIR="$HOME/.claude"
 CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
 COMMANDS_DIR="$CLAUDE_DIR/commands"
+GLOBAL_SCRIPTS_DIR="$HOME/.task-router/scripts"
 
 echo "🚀 Task Router 安裝腳本"
 echo "========================"
@@ -116,11 +117,15 @@ if [ -f "$CLAUDE_MD" ] && grep -q "# === Task Router: Spec Kit" "$CLAUDE_MD" 2>/
     sed -i '' '/# === Task Router: Spec Kit/,/# === End Task Router ===/d' "$CLAUDE_MD"
 fi
 
-# 確認 scripts/call-omlx.sh 可執行
-if [ -f "$SCRIPT_DIR/scripts/call-omlx.sh" ]; then
-    chmod +x "$SCRIPT_DIR/scripts/call-omlx.sh"
-    echo "   ✅ scripts/call-omlx.sh 已確認可執行"
-fi
+# 複製 scripts/ 整包（含 presets + validators）到全域
+echo "📂 複製 scripts/ (call-omlx.sh + presets + validators) 到 $GLOBAL_SCRIPTS_DIR..."
+mkdir -p "$GLOBAL_SCRIPTS_DIR/presets" "$GLOBAL_SCRIPTS_DIR/validators"
+cp "$SCRIPT_DIR/scripts/call-omlx.sh" "$GLOBAL_SCRIPTS_DIR/"
+cp "$SCRIPT_DIR/scripts/usage-stats.sh" "$GLOBAL_SCRIPTS_DIR/" 2>/dev/null || true
+cp "$SCRIPT_DIR/scripts/presets/"*.md "$GLOBAL_SCRIPTS_DIR/presets/" 2>/dev/null || true
+cp "$SCRIPT_DIR/scripts/validators/"*.sh "$GLOBAL_SCRIPTS_DIR/validators/" 2>/dev/null || true
+chmod +x "$GLOBAL_SCRIPTS_DIR/call-omlx.sh" "$GLOBAL_SCRIPTS_DIR/validators/"*.sh 2>/dev/null || true
+echo "   ✅ 全域 scripts 已安裝（$(ls "$GLOBAL_SCRIPTS_DIR/presets/" 2>/dev/null | wc -l | tr -d ' ') presets, $(ls "$GLOBAL_SCRIPTS_DIR/validators/" 2>/dev/null | wc -l | tr -d ' ') validators）"
 
 # 寫入 OMLX_API_KEY 到 shell profile（如果尚未設定）
 SHELL_PROFILE=""
@@ -145,18 +150,38 @@ cat >> "$CLAUDE_MD" << 'RULES'
 
 # === Task Router: Spec Kit + Bash+curl 自動路由 ===
 
-## 強制路由規則
+全域 helper 位於 `~/.task-router/scripts/call-omlx.sh`（由 install.sh 部署）。
+專案若自帶 `./scripts/call-omlx.sh` 優先用專案版本。
 
-當使用者執行以下 Spec Kit slash commands 或等效自然語言請求時，你**必須**用 **Bash 執行 `./scripts/call-omlx.sh`**（或直接 curl 呼叫 oMLX），不可自己處理：
+## 強制路由規則 — 使用 preset（有 validator 守門）
 
-| 觸發條件 | 執行方式 |
-|---------|---------|
-| `/speckit.tasks` 或「拆解任務列表」「從 plan 產生 tasks」 | Bash `./scripts/call-omlx.sh "..."` 產生 tasks.md 內容 |
-| `/speckit.analyze` 或「一致性檢查」「比對 spec/plan/tasks」 | Bash `./scripts/call-omlx.sh "..."` 做跨檔案比對 |
-| `/speckit.checklist` 或「品質檢查清單」「requirements checklist」 | Bash `./scripts/call-omlx.sh "..."` 生成 checklist |
-| `/speckit.taskstoissues` 或「任務轉 GitHub issues」 | Bash `./scripts/call-omlx.sh "..."` 轉換格式 |
+以下任務**必須**用 `call-omlx.sh --preset <name>` 執行，Spec Kit 格式由 validator 保證合規：
 
-**如果專案根目錄沒有 `./scripts/call-omlx.sh`**，改用直接 curl：
+| 觸發條件 | 指令 |
+|---------|------|
+| `/speckit.tasks` 或「從 plan 產生 tasks」 | `call-omlx.sh "$(cat plan.md)" --preset speckit-tasks` |
+| `/speckit.checklist` 或「品質檢查清單」 | `call-omlx.sh "$(cat spec.md plan.md)" --preset speckit-checklist` |
+| `/speckit.analyze` 或「一致性檢查」 | `call-omlx.sh "$(cat spec.md plan.md tasks.md)" --preset speckit-analyze` |
+
+**Fallback**：若 exit code = 5（preset 驗證失敗）→ 產出不符 Spec Kit 規範，你接手重做。
+
+## 強制路由規則 — 輕量任務（無 preset）
+
+```bash
+# 專案若有 ./scripts/call-omlx.sh 用專案版，否則用全域
+CALL_OMLX="./scripts/call-omlx.sh"
+[ -x "$CALL_OMLX" ] || CALL_OMLX="$HOME/.task-router/scripts/call-omlx.sh"
+"$CALL_OMLX" "你的 prompt"
+```
+
+適用場景：
+- 翻譯 i18n 字串 / 雙語對照
+- 生成 docstring / JSDoc / 型別註解
+- 生成 DB migration / 測試骨架 / boilerplate
+- 格式轉換（JSON ↔ YAML、CSV → Markdown table）
+- 從 git diff 生成 changelog
+
+**Fallback**：若 `~/.task-router/scripts/call-omlx.sh` 也不存在，改用直接 curl：
 
 ```bash
 curl -s http://127.0.0.1:9000/v1/chat/completions \
@@ -174,31 +199,20 @@ curl -s http://127.0.0.1:9000/v1/chat/completions \
 | `/speckit.specify` | 理解使用者需求與 user stories |
 | `/speckit.clarify` | 找出 spec 缺口需上下文理解 |
 | `/speckit.plan` | 架構與設計決策 |
-| `/speckit.implement` | 依任務複雜度：boilerplate/CRUD/config → call-omlx.sh；auth/security/核心邏輯 → Claude |
+| `/speckit.implement` | 依複雜度：boilerplate/CRUD/config → call-omlx.sh；auth/security/核心邏輯 → Claude |
 
-## 同樣委派給 call-omlx.sh 的輕量任務
+## 通用 Fallback 規則
 
-（不限於 Spec Kit，任何時候遇到都該路由）
-
-- 翻譯 i18n 字串 / 雙語對照
-- 生成 docstring / JSDoc / 型別註解
-- 生成 DB migration
-- 生成測試骨架（test stubs）
-- 格式轉換（JSON ↔ YAML、CSV → Markdown table）
-- 從 git diff 生成 changelog
-- 簡單問答、boilerplate、scaffold
-
-## Fallback 規則
-
-- 若 `call-omlx.sh` 回傳 `❌ oMLX FALLBACK` 或 exit code != 0 → 你接手自己處理
-- 若 curl 顯示 connection refused（oMLX 離線）→ 你接手自己處理
-- 若本地模型產出品質明顯不夠（邏輯錯誤、格式破損）→ 你重做
+- exit code = 5 → preset validator 失敗，你接手重做
+- exit code = 1 → oMLX 離線或 connection refused，你接手
+- exit code != 0（其他）→ 你接手處理
+- 本地模型產出品質明顯不夠（邏輯錯誤、格式破損）→ 你重做
 
 ## 執行注意事項
 
-- `OMLX_API_KEY` 環境變數必須已設定（install.sh 會處理或寫入 shell profile）
+- `OMLX_API_KEY` 環境變數必須已設定（install.sh 會寫入 shell profile）
 - 呼叫時 API key 用 `$OMLX_API_KEY` 變數展開，**不要把實際 key 寫進 Bash 指令**
-- `./scripts/call-omlx.sh` 會自動記錄使用情況到 `~/.task-router/usage.log`
+- call-omlx.sh 會自動記錄使用情況到 `~/.task-router/usage.log`
 
 # === End Task Router ===
 RULES
@@ -217,9 +231,14 @@ echo ""
 echo "使用方式："
 echo "  在任何專案開 claude，即可使用："
 echo "  • /local 翻譯 hello world         — 直接丟給本地模型"
-echo "  • /speckit.tasks                  — Spec Kit 拆任務（自動路由本地模型）"
+echo "  • /speckit.tasks                  — Spec Kit 拆任務（含 preset+validator 守門）"
 echo "  • /speckit.analyze                — Spec Kit 一致性檢查"
 echo "  • /speckit.checklist              — Spec Kit 品質清單"
+echo ""
+echo "全域工具路徑："
+echo "  ~/.task-router/scripts/call-omlx.sh              — 主 helper"
+echo "  ~/.task-router/scripts/presets/*.md              — few-shot system prompts"
+echo "  ~/.task-router/scripts/validators/*.sh           — Spec Kit 規範驗證器"
 echo ""
 echo "⚠️  記得先啟動 oMLX app 並載入模型！"
 echo ""
