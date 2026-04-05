@@ -30,7 +30,7 @@ def _build_config(
     omlx_key: str | None,
     verbose: bool,
     force: str | None,
-    workflow: str = "vibelens",
+    workflow: str = "speckit",
 ) -> RouterConfig:
     api_key = claude_key or os.environ.get("ANTHROPIC_API_KEY", "")
     omlx_api_key = omlx_key or os.environ.get("OMLX_API_KEY", "")
@@ -54,7 +54,7 @@ def ask(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show classification details"),
     force: str | None = typer.Option(None, "--force", "-f", help="Force routing to 'local' or 'cloud'"),
     phase: str | None = typer.Option(None, "--phase", "-p", help="Workflow phase override (e.g. plan, tasks, implement)"),
-    workflow: str = typer.Option("vibelens", "--workflow", "-w", help="Workflow preset: vibelens, speckit"),
+    workflow: str = typer.Option("speckit", "--workflow", "-w", help="Workflow preset: speckit, vibelens"),
     system: str | None = typer.Option(None, "--system", "-s", help="System prompt"),
 ):
     """Send a task and let the router decide where to run it."""
@@ -97,7 +97,7 @@ def classify_task(
 @app.command()
 def phases(
     task_file: str | None = typer.Argument(None, help="Path to tasks.md file to analyze"),
-    workflow: str = typer.Option("vibelens", "--workflow", "-w", help="Workflow preset: vibelens, speckit"),
+    workflow: str = typer.Option("speckit", "--workflow", "-w", help="Workflow preset: speckit, vibelens"),
 ):
     """Show workflow phase routing table, or analyze a tasks.md file."""
     wf = get_workflow(workflow)
