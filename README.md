@@ -132,10 +132,37 @@ uv run task-router phases --workflow speckit
 uv run task-router ask "generate task list" --workflow speckit
 ```
 
+## Preset 系統（Spec Kit 品質守門）
+
+本地模型在沒有明確格式範例時容易亂產（例如 `SETUP-001` 而非 `T001`、忘記標 `[P]`）。Preset 系統解決這問題：
+
+```bash
+# 用 preset，內建 few-shot 範例 + 自動驗證
+./scripts/call-omlx.sh "$(cat plan.md)" --preset speckit-tasks
+```
+
+**流程**：
+1. `scripts/presets/speckit-tasks.md` 當作 system prompt（含完整格式規則 + 範例輸出）
+2. oMLX 產出後，`scripts/validators/speckit-tasks.sh` 檢查規範：
+   - Task ID 必須是 `T001`、`T002`... 全域單調（不可 `SETUP-001`）
+   - User story phase 才能加 `[US1]/[US2]/[US3]`，Setup/Polish 不能加
+   - 必須有 `[P]` 平行標記、Dependencies 區塊
+   - 任務數量介於 5-40（太少表示拆不夠，太多表示過度拆解）
+3. **不符規範 → exit code 5**，Claude 接手重做
+
+| Preset | 用途 | Validator 規則數 |
+|--------|------|-----|
+| `speckit-tasks` | 從 plan 生成 tasks.md | 6 |
+| `speckit-checklist` | 從 spec+plan 生成品質檢查清單 | 4 |
+| `speckit-analyze` | 跨檔案一致性分析 | 3 |
+
+可以自己加新 preset：在 `scripts/presets/` 寫 system prompt（含 few-shot 範例），在 `scripts/validators/` 寫對應驗證腳本。
+
 ## 內建保護機制
 
 | 機制 | 說明 |
 |------|------|
+| Preset validator | Spec Kit 輸出不符規範自動 fallback（exit 5） |
 | Auto-compact | 輸入超過 70% context window 時自動壓縮再送 |
 | Chunked map-reduce | 超過 90% 時自動分段處理再合併 |
 | Fallback | 真的太大就回報，Claude 自己接手 |
