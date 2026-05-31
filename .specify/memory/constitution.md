@@ -1,50 +1,51 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# Task Router Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Codex-First Agent Context
+Repository guidance must target Codex through `AGENTS.md`, `BARRON_MEMORY.md`,
+and `.codex/`. Claude-specific files may remain for compatibility, but they are
+not the primary instruction surface.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Local Model Delegation
+Simple, repetitive, and format-heavy tasks may be delegated to oMLX through
+`./scripts/call-omlx.sh` or the `omlx-local` MCP tools. Codex remains
+responsible for reviewing output quality before applying changes.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. Complex Work Stays With Codex
+Architecture, security-sensitive code, authentication, routing decisions,
+concurrency, data-loss risk, and unclear product behavior must be handled by
+Codex directly.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. Spec Kit Discipline
+Spec Kit artifacts must stay internally consistent. Specs describe user value,
+plans describe technical approach, and tasks describe independently executable
+work with clear ordering and validation.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### V. Scoped, Verifiable Changes
+Changes should be small, reviewable, and aligned with existing repo style.
+Validation starts narrow and expands only when risk or blast radius justifies it.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+## Technical Constraints
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+- Use Python 3.11+ and `uv` for project commands.
+- Preserve local oMLX compatibility and the legacy Claude command files unless
+  Barron explicitly asks to remove them.
+- Prefer deterministic scripts and local validation over network-dependent steps.
+- Do not commit, reset, or revert user changes without explicit instruction.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+## Development Workflow
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+1. Inspect relevant files before editing.
+2. Use Codex guidance from `AGENTS.md`, `BARRON_MEMORY.md`, and `.codex/`.
+3. Delegate only low-risk drafts to the local model.
+4. Apply final edits with Codex review and targeted validation.
+5. Keep legacy Claude behavior documented but secondary.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution overrides placeholder Spec Kit defaults for this repo. Updates
+must preserve Codex as the primary agent target and must document any intentional
+Claude compatibility behavior.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-05-03 | **Last Amended**: 2026-05-03

@@ -2,7 +2,7 @@
 
 Supports pluggable workflow toolkits (Spec Kit, or custom).
 Maps workflow phases to routing decisions:
-- Deep reasoning phases → cloud (Claude)
+- Deep reasoning phases → cloud backend
 - Structured output phases → local (oMLX)
 - Implementation → depends on individual task complexity
 """

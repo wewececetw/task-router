@@ -2,243 +2,363 @@
 set -euo pipefail
 
 # ============================================================================
-# Task Router 一鍵安裝腳本
-# 自動完成：註冊 MCP server + 複製 slash commands + 寫入全域 CLAUDE.md
+# Task Router installer
+# Supports selectable agent profiles: Codex, Claude Code, or both.
 # ============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+GLOBAL_SCRIPTS_DIR="$HOME/.task-router/scripts"
+SHARED_RULES="$SCRIPT_DIR/agent-profiles/shared/routing-rules.md"
+CODEX_TEMPLATE="$SCRIPT_DIR/agent-profiles/codex/AGENTS.md.template"
+CODEX_PROMPTS_DIR="$SCRIPT_DIR/agent-profiles/codex/prompts"
+CLAUDE_TEMPLATE="$SCRIPT_DIR/agent-profiles/claude/CLAUDE.md.template"
+CLAUDE_COMMANDS_DIR="$SCRIPT_DIR/.claude/commands"
+
+CODEX_DIR="$HOME/.codex"
+CODEX_AGENTS="$CODEX_DIR/AGENTS.md"
+CODEX_PROMPTS_TARGET="$CODEX_DIR/prompts/task-router"
+
 CLAUDE_DIR="$HOME/.claude"
 CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
-COMMANDS_DIR="$CLAUDE_DIR/commands"
-GLOBAL_SCRIPTS_DIR="$HOME/.task-router/scripts"
+CLAUDE_COMMANDS_TARGET="$CLAUDE_DIR/commands"
 
-echo "🚀 Task Router 安裝腳本"
-echo "========================"
-echo ""
+AGENT="both"
+DRY_RUN=false
+FORCE=false
+REGISTER_MCP="N"
 
-# ------------------------------------------------------------------
-# 1. 檢查前置條件
-# ------------------------------------------------------------------
+usage() {
+    cat << USAGE
+Usage: ./install.sh [--agent codex|claude|both] [--dry-run] [--force]
 
-echo "📋 檢查前置條件..."
+Options:
+  --agent      Agent profile to install. Default: both
+  --dry-run    Print planned writes without changing files
+  --force      Continue past missing optional agent CLIs
+  -h, --help   Show this help
+USAGE
+}
 
-if ! command -v claude &>/dev/null; then
-    echo "❌ 找不到 claude CLI。請先安裝 Claude Code: https://claude.com/claude-code"
-    exit 1
-fi
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --agent)
+            AGENT="${2:-}"
+            shift 2
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        --force)
+            FORCE=true
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown argument: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
 
-if ! command -v uv &>/dev/null; then
-    echo "❌ 找不到 uv。請先安裝: curl -LsSf https://astral.sh/uv/install.sh | sh"
-    exit 1
-fi
+case "$AGENT" in
+    codex|claude|both) ;;
+    *)
+        echo "Invalid --agent value: $AGENT" >&2
+        echo "Supported values: codex, claude, both" >&2
+        exit 2
+        ;;
+esac
 
-echo "✅ claude CLI 已安裝"
-echo "✅ uv 已安裝"
-echo ""
+includes_agent() {
+    local wanted="$1"
+    [[ "$AGENT" == "$wanted" || "$AGENT" == "both" ]]
+}
 
-# ------------------------------------------------------------------
-# 2. 安裝 Python 依賴
-# ------------------------------------------------------------------
+say_step() {
+    echo ""
+    echo "$1"
+}
 
-echo "📦 安裝 Python 依賴..."
-uv sync --quiet
-echo "✅ 依賴安裝完成"
-echo ""
-
-# ------------------------------------------------------------------
-# 3. 取得 oMLX API key
-# ------------------------------------------------------------------
-
-if [ -z "${OMLX_API_KEY:-}" ]; then
-    echo "🔑 請輸入你的 oMLX API key（在 oMLX app 設定裡可以找到）："
-    read -r OMLX_API_KEY
-    if [ -z "$OMLX_API_KEY" ]; then
-        echo "⚠️  沒有輸入 API key，使用空值（部分 oMLX 設定不需要 key）"
-        OMLX_API_KEY=""
+ensure_dir() {
+    local dir="$1"
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "DRY-RUN: mkdir -p $dir"
+    else
+        mkdir -p "$dir"
     fi
+}
+
+render_template() {
+    local template="$1"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" == "{{SHARED_ROUTING_RULES}}" ]]; then
+            cat "$SHARED_RULES"
+        else
+            printf '%s\n' "$line"
+        fi
+    done < "$template"
+}
+
+write_managed_section() {
+    local target="$1"
+    local title="$2"
+    local rendered="$3"
+    local start="# === Task Router: ${title} ==="
+    local end="# === End Task Router ==="
+
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "DRY-RUN: update managed section in $target"
+        echo "         start: $start"
+        echo "         source: rendered profile template + shared routing rules"
+        return
+    fi
+
+    ensure_dir "$(dirname "$target")"
+
+    local start_count=0
+    local end_count=0
+    if [[ -f "$target" ]]; then
+        start_count=$(grep -c '^# === Task Router:' "$target" 2>/dev/null || true)
+        end_count=$(grep -c '^# === End Task Router ===$' "$target" 2>/dev/null || true)
+    fi
+    if [[ "$start_count" != "$end_count" ]]; then
+        echo "Malformed Task Router managed section in $target; leaving file unchanged." >&2
+        exit 1
+    fi
+
+    local tmp
+    tmp="$(mktemp)"
+    if [[ -f "$target" ]]; then
+        awk '
+            /^# === Task Router:/ { skip = 1; next }
+            /^# === End Task Router ===$/ { skip = 0; next }
+            !skip { print }
+        ' "$target" > "$tmp"
+    fi
+
+    {
+        if [[ -s "$tmp" ]]; then
+            cat "$tmp"
+            printf '\n'
+        fi
+        printf '%s\n\n' "$start"
+        cat "$rendered"
+        printf '\n%s\n' "$end"
+    } > "$target"
+
+    rm -f "$tmp"
+}
+
+copy_shared_scripts() {
+    say_step "📂 Installing shared oMLX helper scripts..."
+    ensure_dir "$GLOBAL_SCRIPTS_DIR/presets"
+    ensure_dir "$GLOBAL_SCRIPTS_DIR/validators"
+
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "DRY-RUN: copy scripts/call-omlx.sh to $GLOBAL_SCRIPTS_DIR/"
+        echo "DRY-RUN: copy scripts/usage-stats.sh to $GLOBAL_SCRIPTS_DIR/ if present"
+        echo "DRY-RUN: copy scripts/presets/*.md to $GLOBAL_SCRIPTS_DIR/presets/"
+        echo "DRY-RUN: copy scripts/validators/*.sh to $GLOBAL_SCRIPTS_DIR/validators/"
+        return
+    fi
+
+    cp "$SCRIPT_DIR/scripts/call-omlx.sh" "$GLOBAL_SCRIPTS_DIR/"
+    cp "$SCRIPT_DIR/scripts/usage-stats.sh" "$GLOBAL_SCRIPTS_DIR/" 2>/dev/null || true
+    cp "$SCRIPT_DIR/scripts/presets/"*.md "$GLOBAL_SCRIPTS_DIR/presets/" 2>/dev/null || true
+    cp "$SCRIPT_DIR/scripts/validators/"*.sh "$GLOBAL_SCRIPTS_DIR/validators/" 2>/dev/null || true
+    chmod +x "$GLOBAL_SCRIPTS_DIR/call-omlx.sh" "$GLOBAL_SCRIPTS_DIR/validators/"*.sh 2>/dev/null || true
+    echo "✅ Shared scripts installed"
+}
+
+write_shell_profile_env() {
+    local shell_profile=""
+    if [[ -f "$HOME/.zshrc" ]]; then
+        shell_profile="$HOME/.zshrc"
+    elif [[ -f "$HOME/.bash_profile" ]]; then
+        shell_profile="$HOME/.bash_profile"
+    fi
+
+    if [[ -z "$shell_profile" || -z "${OMLX_API_KEY:-}" ]]; then
+        return
+    fi
+
+    if grep -q "OMLX_API_KEY" "$shell_profile" 2>/dev/null; then
+        return
+    fi
+
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "DRY-RUN: append OMLX_API_KEY and OMLX_BASE_URL to $shell_profile"
+        return
+    fi
+
+    {
+        echo ""
+        echo "# Task Router: oMLX API key"
+        echo "export OMLX_API_KEY=\"$OMLX_API_KEY\""
+        echo "export OMLX_BASE_URL=\"$OMLX_BASE_URL\""
+    } >> "$shell_profile"
+    echo "✅ Wrote OMLX environment to $shell_profile"
+}
+
+install_codex_profile() {
+    say_step "🧭 Installing Codex profile..."
+    local rendered
+    rendered="$(mktemp)"
+    render_template "$CODEX_TEMPLATE" > "$rendered"
+    write_managed_section "$CODEX_AGENTS" "Codex Profile" "$rendered"
+    rm -f "$rendered"
+
+    ensure_dir "$CODEX_PROMPTS_TARGET"
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "DRY-RUN: copy $CODEX_PROMPTS_DIR/*.md to $CODEX_PROMPTS_TARGET/"
+    else
+        cp "$CODEX_PROMPTS_DIR/"*.md "$CODEX_PROMPTS_TARGET/"
+        echo "✅ Codex profile installed"
+    fi
+}
+
+install_claude_profile() {
+    say_step "📝 Installing Claude Code profile..."
+    ensure_dir "$CLAUDE_COMMANDS_TARGET"
+
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "DRY-RUN: copy $CLAUDE_COMMANDS_DIR/*.md to $CLAUDE_COMMANDS_TARGET/"
+    else
+        cp "$CLAUDE_COMMANDS_DIR/"*.md "$CLAUDE_COMMANDS_TARGET/"
+        echo "✅ Claude slash commands installed"
+    fi
+
+    local rendered
+    rendered="$(mktemp)"
+    render_template "$CLAUDE_TEMPLATE" > "$rendered"
+    write_managed_section "$CLAUDE_MD" "Claude Code Profile" "$rendered"
+    rm -f "$rendered"
+}
+
+maybe_register_claude_mcp() {
+    if ! includes_agent claude; then
+        return
+    fi
+
+    if ! command -v claude >/dev/null 2>&1; then
+        echo "⚠️  claude CLI not found; skipping optional MCP registration"
+        return
+    fi
+
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "DRY-RUN: optional Claude MCP registration would be offered"
+        return
+    fi
+
+    echo ""
+    echo "🔌 Claude MCP server registration is optional."
+    echo "   Bash/curl helper is the default path; MCP is legacy/fallback."
+    read -r -p "   Register omlx-local MCP server for Claude Code? [y/N] " REGISTER_MCP
+
+    if [[ "$REGISTER_MCP" =~ ^[Yy]$ ]]; then
+        claude mcp remove omlx-local -s user 2>/dev/null || true
+        claude mcp add omlx-local -s user \
+            -e OMLX_API_KEY="$OMLX_API_KEY" \
+            -e OMLX_BASE_URL="$OMLX_BASE_URL" \
+            -- uv run --directory "$SCRIPT_DIR" python mcp_omlx.py
+        echo "✅ Claude MCP server registered"
+    else
+        echo "⏭️  Skipped Claude MCP registration"
+    fi
+}
+
+print_plan() {
+    echo "Selected agent profile: $AGENT"
+    echo "Dry run: $DRY_RUN"
+    echo ""
+    echo "Shared writes:"
+    echo "  - $GLOBAL_SCRIPTS_DIR/call-omlx.sh"
+    echo "  - $GLOBAL_SCRIPTS_DIR/presets/*.md"
+    echo "  - $GLOBAL_SCRIPTS_DIR/validators/*.sh"
+
+    if includes_agent codex; then
+        echo ""
+        echo "Codex writes:"
+        echo "  - $CODEX_AGENTS managed section"
+        echo "  - $CODEX_PROMPTS_TARGET/*.md"
+    fi
+
+    if includes_agent claude; then
+        echo ""
+        echo "Claude Code writes:"
+        echo "  - $CLAUDE_MD managed section"
+        echo "  - $CLAUDE_COMMANDS_TARGET/*.md"
+        echo "  - optional claude mcp registration"
+    fi
+}
+
+echo "🚀 Task Router installer"
+echo "========================"
+print_plan
+
+say_step "📋 Checking prerequisites..."
+
+if ! command -v uv >/dev/null 2>&1; then
+    echo "❌ uv is required. Install with: curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
+    exit 1
+fi
+echo "✅ uv found"
+
+if includes_agent codex && ! command -v codex >/dev/null 2>&1; then
+    echo "⚠️  codex CLI not found; file-based Codex guidance can still be installed"
 fi
 
+if includes_agent claude && ! command -v claude >/dev/null 2>&1; then
+    echo "⚠️  claude CLI not found; slash-command files can still be installed, MCP registration will be skipped"
+fi
+
+if [[ "$DRY_RUN" == false ]]; then
+    say_step "📦 Installing Python dependencies..."
+    uv sync --quiet
+    echo "✅ Dependencies installed"
+fi
+
+if [[ -z "${OMLX_API_KEY:-}" && "$DRY_RUN" == false ]]; then
+    say_step "🔑 oMLX API key"
+    read -r -p "Enter oMLX API key (leave blank if your oMLX setup does not require one): " OMLX_API_KEY
+fi
+
+OMLX_API_KEY="${OMLX_API_KEY:-}"
 OMLX_BASE_URL="${OMLX_BASE_URL:-http://127.0.0.1:9000/v1}"
 echo "✅ oMLX base URL: $OMLX_BASE_URL"
+
+copy_shared_scripts
+write_shell_profile_env
+
+if includes_agent codex; then
+    install_codex_profile
+fi
+
+if includes_agent claude; then
+    install_claude_profile
+fi
+
+maybe_register_claude_mcp
+
 echo ""
-
-# ------------------------------------------------------------------
-# 4. 註冊 MCP server（可選 - legacy）
-# ------------------------------------------------------------------
-
-echo "🔌 MCP server 註冊（可選）"
-echo "   新架構使用 Bash+curl 直接呼叫 oMLX，MCP server 僅作為 legacy/fallback 選項"
-read -r -p "   是否要註冊 omlx-local MCP server？[y/N] " REGISTER_MCP
-
-if [[ "$REGISTER_MCP" =~ ^[Yy]$ ]]; then
-    claude mcp remove omlx-local -s user 2>/dev/null || true
-    claude mcp add omlx-local -s user \
-        -e OMLX_API_KEY="$OMLX_API_KEY" \
-        -e OMLX_BASE_URL="$OMLX_BASE_URL" \
-        -- uv run --directory "$SCRIPT_DIR" python mcp_omlx.py
-    echo "   ✅ MCP server 已註冊（legacy mode）"
+echo "==============================="
+if [[ "$DRY_RUN" == true ]]; then
+    echo "✅ Dry run complete. No files were changed."
 else
-    echo "   ⏭️  跳過 MCP 註冊（使用 Bash+curl 即可）"
+    echo "🎉 Installation complete."
 fi
-echo ""
-
-# ------------------------------------------------------------------
-# 5. 複製 slash commands 到全域
-# ------------------------------------------------------------------
-
-echo "📝 安裝全域 slash commands..."
-mkdir -p "$COMMANDS_DIR"
-
-# 複製所有 commands，保留既有的非衝突檔案
-cp "$SCRIPT_DIR/.claude/commands/"*.md "$COMMANDS_DIR/"
-
-echo "✅ 已安裝以下 commands:"
-for f in "$SCRIPT_DIR/.claude/commands/"*.md; do
-    name=$(basename "$f" .md)
-    echo "   /$name"
-done
-echo ""
-
-# ------------------------------------------------------------------
-# 6. 寫入全域 CLAUDE.md（Spec Kit + local_llm 自動路由規則）
-# ------------------------------------------------------------------
-
-echo "📄 設定全域 CLAUDE.md 路由規則..."
-
-# 先清除舊版 vibe-lens section（如果有）
-if [ -f "$CLAUDE_MD" ] && grep -q "# === Task Router: vibe-lens" "$CLAUDE_MD" 2>/dev/null; then
-    echo "   🧹 移除舊版 vibe-lens 區塊..."
-    sed -i '' '/# === Task Router: vibe-lens/,/# === End Task Router ===/d' "$CLAUDE_MD"
-fi
-
-# 清除舊版 Spec Kit section（重新安裝時覆蓋）
-if [ -f "$CLAUDE_MD" ] && grep -q "# === Task Router: Spec Kit" "$CLAUDE_MD" 2>/dev/null; then
-    echo "   🔄 覆蓋舊版 Spec Kit 路由規則..."
-    sed -i '' '/# === Task Router: Spec Kit/,/# === End Task Router ===/d' "$CLAUDE_MD"
-fi
-
-# 複製 scripts/ 整包（含 presets + validators）到全域
-echo "📂 複製 scripts/ (call-omlx.sh + presets + validators) 到 $GLOBAL_SCRIPTS_DIR..."
-mkdir -p "$GLOBAL_SCRIPTS_DIR/presets" "$GLOBAL_SCRIPTS_DIR/validators"
-cp "$SCRIPT_DIR/scripts/call-omlx.sh" "$GLOBAL_SCRIPTS_DIR/"
-cp "$SCRIPT_DIR/scripts/usage-stats.sh" "$GLOBAL_SCRIPTS_DIR/" 2>/dev/null || true
-cp "$SCRIPT_DIR/scripts/presets/"*.md "$GLOBAL_SCRIPTS_DIR/presets/" 2>/dev/null || true
-cp "$SCRIPT_DIR/scripts/validators/"*.sh "$GLOBAL_SCRIPTS_DIR/validators/" 2>/dev/null || true
-chmod +x "$GLOBAL_SCRIPTS_DIR/call-omlx.sh" "$GLOBAL_SCRIPTS_DIR/validators/"*.sh 2>/dev/null || true
-echo "   ✅ 全域 scripts 已安裝（$(ls "$GLOBAL_SCRIPTS_DIR/presets/" 2>/dev/null | wc -l | tr -d ' ') presets, $(ls "$GLOBAL_SCRIPTS_DIR/validators/" 2>/dev/null | wc -l | tr -d ' ') validators）"
-
-# 寫入 OMLX_API_KEY 到 shell profile（如果尚未設定）
-SHELL_PROFILE=""
-if [ -f "$HOME/.zshrc" ]; then
-    SHELL_PROFILE="$HOME/.zshrc"
-elif [ -f "$HOME/.bash_profile" ]; then
-    SHELL_PROFILE="$HOME/.bash_profile"
-fi
-
-if [ -n "$SHELL_PROFILE" ] && [ -n "$OMLX_API_KEY" ]; then
-    if ! grep -q "OMLX_API_KEY" "$SHELL_PROFILE" 2>/dev/null; then
-        echo "" >> "$SHELL_PROFILE"
-        echo "# Task Router: oMLX API key" >> "$SHELL_PROFILE"
-        echo "export OMLX_API_KEY=\"$OMLX_API_KEY\"" >> "$SHELL_PROFILE"
-        echo "export OMLX_BASE_URL=\"$OMLX_BASE_URL\"" >> "$SHELL_PROFILE"
-        echo "   ✅ 已寫入 OMLX_API_KEY 到 $SHELL_PROFILE"
-    fi
-fi
-
-# Append 新的路由規則
-cat >> "$CLAUDE_MD" << 'RULES'
-
-# === Task Router: Spec Kit + Bash+curl 自動路由 ===
-
-全域 helper 位於 `~/.task-router/scripts/call-omlx.sh`（由 install.sh 部署）。
-專案若自帶 `./scripts/call-omlx.sh` 優先用專案版本。
-
-## 強制路由規則 — 使用 preset（有 validator 守門）
-
-以下任務**必須**用 `call-omlx.sh --preset <name>` 執行，Spec Kit 格式由 validator 保證合規：
-
-| 觸發條件 | 指令 |
-|---------|------|
-| `/speckit.tasks` 或「從 plan 產生 tasks」 | `call-omlx.sh "$(cat plan.md)" --preset speckit-tasks` |
-| `/speckit.checklist` 或「品質檢查清單」 | `call-omlx.sh "$(cat spec.md plan.md)" --preset speckit-checklist` |
-| `/speckit.analyze` 或「一致性檢查」 | `call-omlx.sh "$(cat spec.md plan.md tasks.md)" --preset speckit-analyze` |
-
-**Fallback**：若 exit code = 5（preset 驗證失敗）→ 產出不符 Spec Kit 規範，你接手重做。
-
-## 強制路由規則 — 輕量任務（無 preset）
-
-```bash
-# 專案若有 ./scripts/call-omlx.sh 用專案版，否則用全域
-CALL_OMLX="./scripts/call-omlx.sh"
-[ -x "$CALL_OMLX" ] || CALL_OMLX="$HOME/.task-router/scripts/call-omlx.sh"
-"$CALL_OMLX" "你的 prompt"
-```
-
-適用場景：
-- 翻譯 i18n 字串 / 雙語對照
-- 生成 docstring / JSDoc / 型別註解
-- 生成 DB migration / 測試骨架 / boilerplate
-- 格式轉換（JSON ↔ YAML、CSV → Markdown table）
-- 從 git diff 生成 changelog
-
-**Fallback**：若 `~/.task-router/scripts/call-omlx.sh` 也不存在，改用直接 curl：
-
-```bash
-curl -s http://127.0.0.1:9000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $OMLX_API_KEY" \
-  -d '{"model":"Qwen3.5-9B-MLX-4bit","messages":[{"role":"user","content":"..."}],"max_tokens":4096,"chat_template_kwargs":{"enable_thinking":false}}' \
-  | jq -r '.choices[0].message.content'
-```
-
-## 不委派的情況（由 Claude 直接處理）
-
-| 觸發條件 | 原因 |
-|---------|------|
-| `/speckit.constitution` | 定義專案原則，需深度推理 |
-| `/speckit.specify` | 理解使用者需求與 user stories |
-| `/speckit.clarify` | 找出 spec 缺口需上下文理解 |
-| `/speckit.plan` | 架構與設計決策 |
-| `/speckit.implement` | 依複雜度：boilerplate/CRUD/config → call-omlx.sh；auth/security/核心邏輯 → Claude |
-
-## 通用 Fallback 規則
-
-- exit code = 5 → preset validator 失敗，你接手重做
-- exit code = 1 → oMLX 離線或 connection refused，你接手
-- exit code != 0（其他）→ 你接手處理
-- 本地模型產出品質明顯不夠（邏輯錯誤、格式破損）→ 你重做
-
-## 執行注意事項
-
-- `OMLX_API_KEY` 環境變數必須已設定（install.sh 會寫入 shell profile）
-- 呼叫時 API key 用 `$OMLX_API_KEY` 變數展開，**不要把實際 key 寫進 Bash 指令**
-- call-omlx.sh 會自動記錄使用情況到 `~/.task-router/usage.log`
-
-# === End Task Router ===
-RULES
-
-echo "✅ 全域 CLAUDE.md 路由規則已寫入"
-echo ""
-
-# ------------------------------------------------------------------
-# 完成
-# ------------------------------------------------------------------
-
-echo "==============================="
-echo "🎉 安裝完成！"
 echo "==============================="
 echo ""
-echo "使用方式："
-echo "  在任何專案開 claude，即可使用："
-echo "  • /local 翻譯 hello world         — 直接丟給本地模型"
-echo "  • /speckit.tasks                  — Spec Kit 拆任務（含 preset+validator 守門）"
-echo "  • /speckit.analyze                — Spec Kit 一致性檢查"
-echo "  • /speckit.checklist              — Spec Kit 品質清單"
-echo ""
-echo "全域工具路徑："
-echo "  ~/.task-router/scripts/call-omlx.sh              — 主 helper"
-echo "  ~/.task-router/scripts/presets/*.md              — few-shot system prompts"
-echo "  ~/.task-router/scripts/validators/*.sh           — Spec Kit 規範驗證器"
-echo ""
-echo "⚠️  記得先啟動 oMLX app 並載入模型！"
-echo ""
+echo "Next steps:"
+if includes_agent codex; then
+    echo "  - Codex: restart/open Codex in a project and follow Task Router guidance."
+fi
+if includes_agent claude; then
+    echo "  - Claude Code: open claude and use /local, /speckit.tasks, /speckit.analyze, /speckit.checklist."
+fi
+echo "  - Start oMLX and load your local model before routing local tasks."

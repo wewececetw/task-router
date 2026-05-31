@@ -1,7 +1,7 @@
 [project]
 name = "task-router"
 version = "0.1.0"
-description = "Task-based routing: simple tasks → local model (oMLX), complex tasks → Claude API"
+description = "Task-based routing: simple tasks → local model (oMLX), complex tasks → active agent"
 requires-python = ">=3.11"
 dependencies = [
     "anthropic>=0.45.0",

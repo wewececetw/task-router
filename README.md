@@ -1,41 +1,41 @@
 # Task Router
 
-智慧任務分流系統 — 簡單任務交給本地模型 (oMLX)，複雜任務留給 Claude。
+智慧任務分流系統 — 簡單任務交給本地模型 (oMLX)，複雜任務留給使用中的 agent。
 支援 Spec Kit 或任何自訂工作流。
 
 ## 為什麼需要這個？
 
-用 SDD（Spec-Driven Development）做開發時，不是每個階段都需要 Claude 的推理能力：
+用 SDD（Spec-Driven Development）做開發時，不是每個階段都需要主 agent 的推理能力：
 
 | 工作流階段 | 需要什麼 | 適合的模型 |
 |------------|---------|-----------|
-| constitution / specify / plan / gate | 深度推理、架構設計 | ☁️ Claude |
+| constitution / specify / plan / gate | 深度推理、架構設計 | ☁️ Codex / Claude Code |
 | tasks / checklist / analyze / digest / export | 結構化轉換 | 🖥️ 本地模型 |
 | implement（簡單） | boilerplate, CRUD, config | 🖥️ 本地模型 |
-| implement（複雜） | auth, security, 核心邏輯 | ☁️ Claude |
+| implement（複雜） | auth, security, 核心邏輯 | ☁️ Codex / Claude Code |
 
-**結果：約 50% 的任務可以在本地執行，省下 Claude API 額度。**
+**結果：約 50% 的任務可以在本地執行，主 agent 專注在高風險或高推理工作。**
 
 ## 系統架構
 
 ```
-Claude Code（Pro/Max 會員）
+Codex 或 Claude Code
     │
-    ├── 複雜任務 → Claude 自己處理（會員額度）
+    ├── 複雜任務 → active agent 自己處理
     │
-    └── /local, /i18n, /docstring ...
+    └── Spec Kit tasks/checklist/analyze、i18n、docstring ...
          │
          └── Bash: ./scripts/call-omlx.sh
               │
               └── curl → oMLX (本地 Qwen3.5-9B)
 ```
 
-**為什麼用 Bash+curl 而不是 MCP？**
-- Claude Code UI 會顯示 `Bash(./scripts/call-omlx.sh ...)` — 與原生工具（Read/Write/Edit）視覺一致
-- 不會有 MCP tool call 的折疊 JSON 割裂感
+**為什麼用 Bash+curl 作為共通層？**
+- Codex 和 Claude Code 都能呼叫同一個 `call-omlx.sh` helper
+- Spec Kit 的簡單階段可以維持同一套路由規則
 - 使用者全程看得到「在做什麼」
 
-不需要 proxy，不需要額外 API key，不違反 Anthropic 條款。
+不需要 proxy，不需要額外雲端 API key。
 
 > **Legacy**: 舊版 MCP server (`mcp_omlx.py`) 保留為 optional，安裝時可選擇是否註冊。
 
@@ -43,10 +43,10 @@ Claude Code（Pro/Max 會員）
 
 - macOS + Apple Silicon（M1 以上）
 - [oMLX](https://omlx.ai/) — 本地 LLM 推理伺服器
-- [Claude Code](https://claude.com/claude-code) — Pro 或 Max 會員
+- Codex CLI、Claude Code，或兩者都裝
 - `curl` + `jq` — macOS 內建（`brew install jq` 若沒裝）
-- Python 3.11+（僅 legacy MCP 需要）
-- [uv](https://github.com/astral-sh/uv) — Python 套件管理（僅 legacy MCP 需要）
+- Python 3.11+
+- [uv](https://github.com/astral-sh/uv) — Python 套件管理
 
 ## 快速開始
 
@@ -61,19 +61,33 @@ Claude Code（Pro/Max 會員）
 ```bash
 git clone https://github.com/wewececetw/task-router.git
 cd task-router
-./install.sh
+# 預覽，不寫入全域設定
+./install.sh --agent codex --dry-run
+
+# Codex only
+./install.sh --agent codex
+
+# Claude Code only
+./install.sh --agent claude
+
+# 同時安裝 Codex + Claude Code profile
+./install.sh --agent both
 ```
 
 安裝腳本會自動完成：
 - 安裝 Python 依賴（`uv sync`）
-- 註冊 omlx-local MCP server（全域）
-- 複製 slash commands 到 `~/.claude/commands/`（7 個本地模型工具：`/local`、`/i18n`、`/docstring`、`/migration`、`/test-stub`、`/changelog`、`/implement-simple`）
 - 複製 `scripts/call-omlx.sh` helper 到全域位置
-- 寫入全域 `~/.claude/CLAUDE.md` 自動路由規則（Spec Kit + local_llm）
+- 寫入 Codex profile 到 `~/.codex/AGENTS.md` 與 `~/.codex/prompts/task-router/`（選 `codex` 或 `both`）
+- 複製 Claude slash commands 到 `~/.claude/commands/` 並更新 `~/.claude/CLAUDE.md`（選 `claude` 或 `both`）
+- 可選擇註冊 Claude legacy MCP server
 
-**自動路由規則是核心：** 寫入後 Claude 在任何專案遇到 `/speckit.tasks`、`/speckit.analyze`、`/speckit.checklist`、翻譯 i18n、產 docstring 等輕量任務時，會自動委派給本地模型 — 不用你手動選。
+**自動路由規則是核心：** Codex 與 Claude Code profile 使用同一套路由語意。Spec Kit 的 `tasks`、`checklist`、`analyze`、翻譯 i18n、產 docstring 等輕量任務會委派給本地模型；複雜推理留給 active agent。
 
-### 3. 設定 Claude Desktop App（可選）
+GitHub Spec Kit 本身仍是主要 workflow：`specify` CLI 與 `.specify/`
+scripts/templates 負責初始化、spec、plan、tasks 等流程；oMLX 只是其中
+`tasks/checklist/analyze` 和其他輕量產物的加速後端。
+
+### 3. 設定 Claude Desktop App（可選 / legacy MCP）
 
 在 `~/Library/Application Support/Claude/claude_desktop_config.json` 加入：
 
@@ -99,15 +113,15 @@ cd task-router
 
 ### 4. 開始使用
 
-在任何專案裡開 Claude Code，**安裝後所有專案都自動生效**：
+在任何專案裡開 Codex 或 Claude Code，**安裝後對選定 profile 生效**：
 
 ```bash
-# 手動指定本地模型
+# Claude Code: 手動指定本地模型
 /local 翻譯這段英文成中文
 
-# Spec Kit 官方指令 — Claude 會依規則自動路由
-/speckit.specify   # ☁️ Claude 處理（需推理）
-/speckit.plan      # ☁️ Claude 處理（架構決策）
+# Spec Kit — Codex / Claude Code 依同一規則自動路由
+/speckit.specify   # ☁️ active agent 處理（需推理）
+/speckit.plan      # ☁️ active agent 處理（架構決策）
 /speckit.tasks     # 🖥️ 自動委派給本地模型（省 token）
 /speckit.analyze   # 🖥️ 自動委派給本地模型
 /speckit.checklist # 🖥️ 自動委派給本地模型
@@ -116,7 +130,7 @@ cd task-router
 /i18n /docstring /migration /test-stub /changelog /implement-simple
 ```
 
-**怎麼知道有沒有自動路由？** 看 Claude Code 的 tool call 列表 — 出現 `Bash(./scripts/call-omlx.sh ...)` 就代表有省到 token。
+**怎麼知道有沒有自動路由？** 看 agent 的 tool call 列表 — 出現 `./scripts/call-omlx.sh` 或 `~/.task-router/scripts/call-omlx.sh` 就代表有走本地模型。
 
 ## 支援的工作流
 
@@ -124,6 +138,12 @@ cd task-router
 
 [GitHub Spec Kit](https://github.com/github/spec-kit) 的 Spec-Driven Development 工作流：
 constitution → specify → clarify → plan → tasks → implement → analyze → checklist
+
+如果專案還沒初始化 Spec Kit：
+
+```bash
+specify init --here --ai codex --offline
+```
 
 ### CLI 用法
 
@@ -148,7 +168,7 @@ uv run task-router ask "generate task list" --workflow speckit
    - User story phase 才能加 `[US1]/[US2]/[US3]`，Setup/Polish 不能加
    - 必須有 `[P]` 平行標記、Dependencies 區塊
    - 任務數量介於 5-40（太少表示拆不夠，太多表示過度拆解）
-3. **不符規範 → exit code 5**，Claude 接手重做
+3. **不符規範 → exit code 5**，active agent 接手重做
 
 | Preset | 用途 | Validator 規則數 |
 |--------|------|-----|
@@ -165,10 +185,10 @@ uv run task-router ask "generate task list" --workflow speckit
 | Preset validator | Spec Kit 輸出不符規範自動 fallback（exit 5） |
 | Auto-compact | 輸入超過 70% context window 時自動壓縮再送 |
 | Chunked map-reduce | 超過 90% 時自動分段處理再合併 |
-| Fallback | 真的太大就回報，Claude 自己接手 |
+| Fallback | 真的太大就回報，active agent 自己接手 |
 | Thinking 過濾 | 自動關閉 Qwen3.5 思考模式 + 過濾 `<think>` 標籤 |
 | macOS 通知 | 任務完成/失敗時彈系統通知，不用盯著等 |
-| Progress feedback | 即時中英混合進度回饋（類似 Claude Code 體驗） |
+| Progress feedback | 即時中英混合進度回饋 |
 
 ## 可用的 MCP Tools
 
@@ -178,7 +198,7 @@ uv run task-router ask "generate task list" --workflow speckit
 | `local_llm_batch` | 批量送多個 prompt，適合一次處理多個小任務 |
 | `local_llm_status` | 檢查 oMLX 伺服器狀態和可用模型 |
 
-## 可用的 Slash Commands
+## Claude Code Slash Commands
 
 | 指令 | 說明 | 路由 |
 |------|------|------|
@@ -215,7 +235,7 @@ OMLX_API_KEY=xxx uv run task-router ask "翻譯 hello world" --phase tasks -v
 OMLX_API_KEY=xxx ANTHROPIC_API_KEY=xxx python proxy_router.py --port 4000
 ```
 
-這會啟動一個 proxy，自動根據工作流階段分流到 oMLX 或 Claude API。
+這會啟動一個 proxy，自動根據工作流階段分流到 oMLX 或 cloud backend。
 
 ## 授權
 
