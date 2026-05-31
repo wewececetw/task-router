@@ -14,7 +14,7 @@ Features:
   - Auto-compact: 內容快超過 context window 時自動壓縮再送
   - Chunked processing: 太大的內容自動分段處理再合併
   - Connection pool: 持久化 HTTP 連線
-  - Fallback hint: 真的處理不了就回報讓 Claude 自己處理
+  - Fallback hint: 真的處理不了就回報讓 active agent 自己處理
 
 安裝（Claude Code 全域）:
   claude mcp add omlx-local -s user \
@@ -331,7 +331,7 @@ async def local_llm(
     - 寫文件、註解
     - 簡單問答
 
-    不適合的任務（請 Claude 自己處理）:
+    不適合的任務（請 active agent 自己處理）:
     - 架構設計
     - 安全相關程式碼
     - 複雜除錯
@@ -356,7 +356,7 @@ async def local_llm(
     t_start = time.perf_counter()
     prompt, system, note = await _prepare_prompt(prompt, system, max_tokens, ctx=ctx)
 
-    # Fallback: 回傳警告讓 Claude 接手
+    # Fallback: 回傳警告讓 active agent 接手
     if note and note.startswith("⚠️"):
         if ctx:
             await ctx.warning("Prompt 太大，fallback 給 Claude")
@@ -365,7 +365,7 @@ async def local_llm(
             f"⚠️  oMLX FALLBACK\n"
             f"├─ 任務: {task_preview}\n"
             f"├─ 輸入: {original_tokens} tokens\n"
-            f"└─ 原因: 內容太大，建議 Claude 直接處理\n"
+            f"└─ 原因: 內容太大，建議 active agent 直接處理\n"
             f"{'─' * 50}\n"
         )
         return header + note

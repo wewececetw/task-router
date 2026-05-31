@@ -128,7 +128,7 @@ class TaskRouter:
         classification: Classification,
         system: str | None = None,
     ) -> RouterResult:
-        """Run task on Claude API."""
+        """Run task on the configured cloud backend."""
         resp = claude_client.chat(
             client=self.claude,
             messages=messages,
@@ -151,5 +151,5 @@ class TaskRouter:
         table.add_row("Complexity", f"[{'green' if c.complexity == TaskComplexity.SIMPLE else 'red'}]{c.complexity.value}[/]")
         table.add_row("Confidence", f"{c.confidence:.0%}")
         table.add_row("Reason", c.reason)
-        table.add_row("Route →", f"[bold]{'🖥️  Local (oMLX)' if backend == 'local' else '☁️  Cloud (Claude)'}[/bold]")
+        table.add_row("Route →", f"[bold]{'🖥️  Local (oMLX)' if backend == 'local' else '☁️  Cloud'}[/bold]")
         console.print(table)

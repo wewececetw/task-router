@@ -1,0 +1,9 @@
+# Task Router: Spec Kit + Bash/curl Routing
+
+Global helper: `~/.task-router/scripts/call-omlx.sh`
+
+Project helper has priority when present: `./scripts/call-omlx.sh`
+
+These rules match the Codex profile routing behavior, adapted for Claude Code.
+
+{{SHARED_ROUTING_RULES}}

@@ -1,0 +1,22 @@
+# Task Router Codex Profile
+
+Read and follow the shared Task Router routing rules below. They match the
+legacy Claude Code routing behavior, adapted for Codex.
+
+## Codex Responsibilities
+
+- Use GitHub Spec Kit (`specify` CLI and `.specify/` scripts/templates) as the
+  primary workflow when the user asks for Spec Kit.
+- If `.specify/` is missing, initialize with
+  `specify init --here --ai codex --offline` before creating specs.
+- Keep Codex agent context updated with
+  `.specify/scripts/bash/update-agent-context.sh codex`.
+- Handle Spec Kit `constitution`, `specify`, `clarify`, and `plan` directly.
+- Use oMLX for Spec Kit `tasks`, `checklist`, `analyze`, and lightweight drafts.
+- Review all oMLX output before applying code changes.
+- If oMLX fails, validator output fails, or quality is insufficient, finish the
+  task directly in Codex.
+
+## Shared Routing Rules
+
+{{SHARED_ROUTING_RULES}}

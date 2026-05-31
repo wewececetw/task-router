@@ -32,7 +32,7 @@
 #    - Handles agent-specific file paths and naming conventions
 #    - Supports: Claude, Gemini, Copilot, Cursor, Qwen, opencode, Codex, Windsurf, Junie, Kilo Code, Auggie CLI, Roo Code, CodeBuddy CLI, Qoder CLI, Amp, SHAI, Tabnine CLI, Kiro CLI, Mistral Vibe, Kimi Code, Pi Coding Agent, iFlow CLI, Antigravity or Generic
 #    - Can update single agents or all existing agent files
-#    - Creates default Claude file if no agent files exist
+#    - Creates default Codex AGENTS.md file if no agent files exist
 #
 # Usage: ./update-agent-context.sh [agent_type]
 # Agent types: claude|gemini|copilot|cursor-agent|qwen|opencode|codex|windsurf|junie|kilocode|auggie|roo|codebuddy|amp|shai|tabnine|kiro-cli|agy|bob|vibe|qodercli|kimi|trae|pi|iflow|generic
@@ -758,10 +758,10 @@ update_all_existing_agents() {
     _update_if_new "$TRAE_FILE" "Trae"                     || _all_ok=false
     _update_if_new "$IFLOW_FILE" "iFlow CLI"               || _all_ok=false
 
-    # If no agent files exist, create a default Claude file
+    # If no agent files exist, create a default Codex file
     if [[ "$_found_agent" == false ]]; then
-        log_info "No existing agent files found, creating default Claude file..."
-        update_agent_file "$CLAUDE_FILE" "Claude Code" || return 1
+        log_info "No existing agent files found, creating default Codex AGENTS.md file..."
+        update_agent_file "$AGENTS_FILE" "Codex CLI" || return 1
     fi
 
     [[ "$_all_ok" == true ]]

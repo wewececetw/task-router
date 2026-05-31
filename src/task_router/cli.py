@@ -17,7 +17,7 @@ from .workflow import get_workflow, detect_phase, route_phase
 
 app = typer.Typer(
     name="task-router",
-    help="Route tasks to local models (oMLX) or Claude API based on complexity.",
+    help="Route tasks to local models (oMLX) or a cloud backend based on complexity.",
 )
 console = Console()
 
@@ -68,7 +68,7 @@ def ask(
         raise typer.Exit(1)
 
     # Print result
-    backend_label = "Local (oMLX)" if result.routed_to == "local" else "Cloud (Claude)"
+    backend_label = "Local (oMLX)" if result.routed_to == "local" else "Cloud"
     console.print(Panel(
         result.content,
         title=f"[bold]{backend_label}[/bold] — {result.model}",
@@ -89,7 +89,7 @@ def classify_task(
     table.add_row("Confidence", f"{c.confidence:.0%}")
     table.add_row("Reason", c.reason)
     table.add_row("Rules", ", ".join(c.matched_rules))
-    route = "Local (oMLX)" if c.complexity == TaskComplexity.SIMPLE else "Cloud (Claude)"
+    route = "Local (oMLX)" if c.complexity == TaskComplexity.SIMPLE else "Cloud"
     table.add_row("Would route →", f"[bold]{route}[/bold]")
     console.print(table)
 
@@ -164,7 +164,7 @@ def phases(
         )
 
     console.print(table)
-    console.print(f"\n[bold]Summary:[/bold] {local_count} local (oMLX) | {cloud_count} cloud (Claude) | {local_count + cloud_count} total")
+    console.print(f"\n[bold]Summary:[/bold] {local_count} local (oMLX) | {cloud_count} cloud | {local_count + cloud_count} total")
     if local_count + cloud_count > 0:
         pct = local_count / (local_count + cloud_count) * 100
         console.print(f"[bold green]{pct:.0f}% of tasks can run locally[/bold green] — saving API cost 💰")

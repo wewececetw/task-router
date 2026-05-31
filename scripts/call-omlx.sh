@@ -23,7 +23,7 @@
 #   2  API 回傳錯誤
 #   3  缺少 prompt 參數
 #   4  preset 檔案不存在
-#   5  preset 輸出不符規範（Claude 應接手）
+#   5  preset 輸出不符規範（active agent 應接手）
 
 set -euo pipefail
 
@@ -127,7 +127,7 @@ ELAPSED=$((END_TIME - START_TIME))
 # curl 失敗（連不上、timeout）
 if [[ $CURL_EXIT -ne 0 ]]; then
   echo "❌ oMLX FALLBACK: 無法連線到 ${OMLX_BASE_URL} (curl exit $CURL_EXIT)" >&2
-  echo "建議 Claude 接手處理此任務" >&2
+  echo "建議 active agent 接手處理此任務" >&2
   exit 1
 fi
 
@@ -138,7 +138,7 @@ BODY=$(echo "$RESPONSE" | sed '$d')
 # HTTP status 000 = connection refused
 if [[ "$HTTP_CODE" == "000" ]]; then
   echo "❌ oMLX FALLBACK: 無法連線到 ${OMLX_BASE_URL}" >&2
-  echo "建議 Claude 接手處理此任務" >&2
+  echo "建議 active agent 接手處理此任務" >&2
   exit 1
 fi
 
@@ -159,7 +159,7 @@ if [[ -n "$PRESET" ]] && [[ -x "$VALIDATOR_FILE" ]]; then
   if ! echo "$CONTENT" | "$VALIDATOR_FILE"; then
     echo "" >&2
     echo "❌ oMLX FALLBACK: preset '$PRESET' 產出不符 Spec Kit 規範" >&2
-    echo "建議 Claude 接手處理此任務" >&2
+    echo "建議 active agent 接手處理此任務" >&2
     exit 5
   fi
 fi
