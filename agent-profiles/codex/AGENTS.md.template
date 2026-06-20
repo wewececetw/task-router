@@ -2,8 +2,17 @@
 
 This managed section is an index only. Do not add detailed workflow rules here.
 
+- Selected spec workflow rules for this installation: read
+  `~/.codex/agent-factories/selected-spec-workflow.md`.
 - Task Router, Codex/Claude agent profile routing, selected spec workflow
   routing, or oMLX helper usage: read
   `~/.codex/agent-factories/task-router-codex.md`.
 - Spec workflow documentation, feature specs, domain docs, or ADR placement:
   read `~/.codex/agent-factories/spec-workflow-documentation.md`.
+- App, game, mobile, web-app, interactive product, UI, or UX work: read
+  `~/.codex/agent-factories/app-uiux.md`.
+- AI-generated code governance, non-trivial software changes, review workflow,
+  deterministic verification, or scope-control questions: read
+  `~/.codex/agent-factories/ai-code-governance.md`.
+- Backend, API, worker, queue, job, webhook, database, or business-logic work:
+  read `~/.codex/agent-factories/backend-engineering.md`.
