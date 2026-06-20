@@ -21,6 +21,7 @@ CODEX_AGENTS="$CODEX_DIR/AGENTS.md"
 CODEX_PROMPTS_TARGET="$CODEX_DIR/prompts/task-router"
 CODEX_FACTORIES_TARGET="$CODEX_DIR/agent-factories"
 CODEX_SELECTED_SPEC_FACTORY="$CODEX_FACTORIES_TARGET/selected-spec-workflow.md"
+CODEX_LEGACY_FACTORY_FILES=("spec-kit-documentation.md")
 
 CLAUDE_DIR="$HOME/.claude"
 CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
@@ -268,6 +269,16 @@ install_codex_profile() {
         } > "$CODEX_SELECTED_SPEC_FACTORY"
         echo "✅ Codex selected spec workflow installed"
     fi
+
+    for legacy_factory in "${CODEX_LEGACY_FACTORY_FILES[@]}"; do
+        local legacy_path="$CODEX_FACTORIES_TARGET/$legacy_factory"
+        if [[ "$DRY_RUN" == true ]]; then
+            echo "DRY-RUN: remove legacy Codex factory $legacy_path if present"
+        elif [[ -e "$legacy_path" ]]; then
+            rm -f "$legacy_path"
+            echo "🧹 Removed legacy Codex factory: $legacy_factory"
+        fi
+    done
 }
 
 install_claude_profile() {
