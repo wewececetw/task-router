@@ -9,30 +9,36 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 GLOBAL_SCRIPTS_DIR="$HOME/.task-router/scripts"
 SHARED_RULES="$SCRIPT_DIR/agent-profiles/shared/routing-rules.md"
+SPEC_PROFILES_DIR="$SCRIPT_DIR/spec-profiles"
 CODEX_TEMPLATE="$SCRIPT_DIR/agent-profiles/codex/AGENTS.md.template"
 CODEX_PROMPTS_DIR="$SCRIPT_DIR/agent-profiles/codex/prompts"
+CODEX_FACTORIES_DIR="$SCRIPT_DIR/agent-profiles/codex/factories"
 CLAUDE_TEMPLATE="$SCRIPT_DIR/agent-profiles/claude/CLAUDE.md.template"
 CLAUDE_COMMANDS_DIR="$SCRIPT_DIR/.claude/commands"
 
 CODEX_DIR="$HOME/.codex"
 CODEX_AGENTS="$CODEX_DIR/AGENTS.md"
 CODEX_PROMPTS_TARGET="$CODEX_DIR/prompts/task-router"
+CODEX_FACTORIES_TARGET="$CODEX_DIR/agent-factories"
+CODEX_SELECTED_SPEC_FACTORY="$CODEX_FACTORIES_TARGET/selected-spec-workflow.md"
 
 CLAUDE_DIR="$HOME/.claude"
 CLAUDE_MD="$CLAUDE_DIR/CLAUDE.md"
 CLAUDE_COMMANDS_TARGET="$CLAUDE_DIR/commands"
 
 AGENT="both"
+SPEC_PROFILE="github-spec-kit"
 DRY_RUN=false
 FORCE=false
 REGISTER_MCP="N"
 
 usage() {
     cat << USAGE
-Usage: ./install.sh [--agent codex|claude|both] [--dry-run] [--force]
+Usage: ./install.sh [--agent codex|claude|both] [--spec github-spec-kit|github-open-spec] [--dry-run] [--force]
 
 Options:
   --agent      Agent profile to install. Default: both
+  --spec       Spec workflow profile to install. Default: github-spec-kit
   --dry-run    Print planned writes without changing files
   --force      Continue past missing optional agent CLIs
   -h, --help   Show this help
@@ -43,6 +49,10 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --agent)
             AGENT="${2:-}"
+            shift 2
+            ;;
+        --spec)
+            SPEC_PROFILE="${2:-}"
             shift 2
             ;;
         --dry-run)
@@ -74,6 +84,21 @@ case "$AGENT" in
         ;;
 esac
 
+case "$SPEC_PROFILE" in
+    github-spec-kit|github-open-spec) ;;
+    *)
+        echo "Invalid --spec value: $SPEC_PROFILE" >&2
+        echo "Supported values: github-spec-kit, github-open-spec" >&2
+        exit 2
+        ;;
+esac
+
+SPEC_RULES="$SPEC_PROFILES_DIR/$SPEC_PROFILE/routing-rules.md"
+if [[ ! -f "$SPEC_RULES" ]]; then
+    echo "Missing spec profile rules: $SPEC_RULES" >&2
+    exit 2
+fi
+
 includes_agent() {
     local wanted="$1"
     [[ "$AGENT" == "$wanted" || "$AGENT" == "both" ]]
@@ -98,6 +123,8 @@ render_template() {
     while IFS= read -r line || [[ -n "$line" ]]; do
         if [[ "$line" == "{{SHARED_ROUTING_RULES}}" ]]; then
             cat "$SHARED_RULES"
+        elif [[ "$line" == "{{SPEC_WORKFLOW_RULES}}" ]]; then
+            cat "$SPEC_RULES"
         else
             printf '%s\n' "$line"
         fi
@@ -114,7 +141,7 @@ write_managed_section() {
     if [[ "$DRY_RUN" == true ]]; then
         echo "DRY-RUN: update managed section in $target"
         echo "         start: $start"
-        echo "         source: rendered profile template + shared routing rules"
+        echo "         source: rendered agent template + selected spec profile + shared local rules"
         return
     fi
 
@@ -220,6 +247,27 @@ install_codex_profile() {
         cp "$CODEX_PROMPTS_DIR/"*.md "$CODEX_PROMPTS_TARGET/"
         echo "✅ Codex profile installed"
     fi
+
+    ensure_dir "$CODEX_FACTORIES_TARGET"
+    if [[ ! -d "$CODEX_FACTORIES_DIR" ]]; then
+        echo "⏭️  No Codex agent factories found; skipping"
+    elif [[ "$DRY_RUN" == true ]]; then
+        echo "DRY-RUN: copy $CODEX_FACTORIES_DIR/*.md to $CODEX_FACTORIES_TARGET/"
+    else
+        cp "$CODEX_FACTORIES_DIR/"*.md "$CODEX_FACTORIES_TARGET/"
+        echo "✅ Codex agent factories installed"
+    fi
+
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "DRY-RUN: write selected spec workflow to $CODEX_SELECTED_SPEC_FACTORY"
+    else
+        {
+            echo "# Selected Spec Workflow"
+            echo ""
+            cat "$SPEC_RULES"
+        } > "$CODEX_SELECTED_SPEC_FACTORY"
+        echo "✅ Codex selected spec workflow installed"
+    fi
 }
 
 install_claude_profile() {
@@ -274,18 +322,22 @@ maybe_register_claude_mcp() {
 
 print_plan() {
     echo "Selected agent profile: $AGENT"
+    echo "Selected spec profile: $SPEC_PROFILE"
     echo "Dry run: $DRY_RUN"
     echo ""
     echo "Shared writes:"
     echo "  - $GLOBAL_SCRIPTS_DIR/call-omlx.sh"
     echo "  - $GLOBAL_SCRIPTS_DIR/presets/*.md"
     echo "  - $GLOBAL_SCRIPTS_DIR/validators/*.sh"
+    echo "  - spec profile: $SPEC_PROFILE"
 
     if includes_agent codex; then
         echo ""
         echo "Codex writes:"
         echo "  - $CODEX_AGENTS managed section"
         echo "  - $CODEX_PROMPTS_TARGET/*.md"
+        echo "  - $CODEX_FACTORIES_TARGET/*.md if agent-profiles/codex/factories exists"
+        echo "  - $CODEX_SELECTED_SPEC_FACTORY"
     fi
 
     if includes_agent claude; then
@@ -315,6 +367,14 @@ fi
 
 if includes_agent claude && ! command -v claude >/dev/null 2>&1; then
     echo "⚠️  claude CLI not found; slash-command files can still be installed, MCP registration will be skipped"
+fi
+
+if [[ "$SPEC_PROFILE" == "github-spec-kit" ]] && ! command -v specify >/dev/null 2>&1; then
+    echo "⚠️  specify CLI not found; GitHub Spec Kit guidance will still be installed"
+fi
+
+if [[ "$SPEC_PROFILE" == "github-open-spec" ]] && ! command -v openspec >/dev/null 2>&1; then
+    echo "⚠️  openspec CLI not found; install with: npm install -g @fission-ai/openspec@latest"
 fi
 
 if [[ "$DRY_RUN" == false ]]; then
@@ -362,3 +422,6 @@ if includes_agent claude; then
     echo "  - Claude Code: open claude and use /local, /speckit.tasks, /speckit.analyze, /speckit.checklist."
 fi
 echo "  - Start oMLX and load your local model before routing local tasks."
+if [[ "$SPEC_PROFILE" == "github-open-spec" ]]; then
+    echo "  - OpenSpec: run openspec init in projects that do not have openspec/ yet."
+fi

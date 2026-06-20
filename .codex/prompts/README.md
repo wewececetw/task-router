@@ -14,6 +14,7 @@ task by name.
   review and patch the result.
 - `maintenance.md`: changelog, docstring, i18n, migration, and test-stub flows.
 - `speckit.md`: Codex handling for Spec Kit workflows.
+- `openspec.md`: Codex handling for Fission-AI/OpenSpec workflows.
 
 Legacy Claude files remain in `.claude/commands/` for reference and backward
 compatibility.
