@@ -265,7 +265,7 @@ OMLX_API_KEY=xxx ANTHROPIC_API_KEY=xxx python proxy_router.py --port 4000
 
 ## 授權
 
-MIT
+MIT，見 [LICENSE](LICENSE)。內含的 GitHub Spec Kit 檔案維持其原 MIT 授權，見 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 作者
 
